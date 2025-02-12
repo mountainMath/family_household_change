@@ -8,13 +8,13 @@ include-in-header:
         <meta name="twitter:title" content="The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"/>
         <meta name="twitter:description" content="We examine whether housing shortages can usefully explain household and family change."/>
         <meta name="twitter:url" content="https://mountainmath.github.io/family_household_change/family_household_change/"/>
-        <meta name="twitter:image" content="https://mountainmath.github.io/family_household_change/images/fig-non-mhu-shortfall-rents.png"/>
+        <meta name="twitter:image" content="https://mountainmath.github.io/family_household_change/images/fig-model-culture-baseline-comparison-1.png"/>
         <meta name="twitter:image:alt" content="Doubled-up households vs rent"/>
         <meta name="twitter:card" content="summary_large_image"/>
         <meta property="og:title" content="The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"/>
         <meta property="og:description" content="We examine whether housing shortages can usefully explain household and family change."/>
         <meta property="og:url" content="https://mountainmath.github.io/family_household_change/family_household_change/"/>
-        <meta property="og:image" content="https://mountainmath.github.io/family_household_change/images/fig-non-mhu-shortfall-rents.png"/>
+        <meta property="og:image" content="https://mountainmath.github.io/family_household_change/images/fig-model-culture-baseline-comparison-1.png"/>
         <meta property="og:image:alt" content="Doubled-up households vs rent"/>
         <meta property="og:type" content="website"/>
         <meta property="og:locale" content="en_US"/>
