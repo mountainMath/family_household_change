@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+data_cache/*
+*.rmarkdown
+family_household_change_*
+index_files/*

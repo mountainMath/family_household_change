@@ -1,0 +1,56 @@
+---
+title: "The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"
+format: html
+backgroundcolor: "#F8F4F0"
+include-in-header: 
+      text: |
+        <meta name="github-repo" content="mountainmath/family_household_change"/>
+        <meta name="twitter:title" content="The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"/>
+        <meta name="twitter:description" content="We examine whether housing shortages can usefully explain household and family change."/>
+        <meta name="twitter:url" content="https://mountainmath.github.io/family_household_change/family_household_change/"/>
+        <meta name="twitter:image" content="https://mountainmath.github.io/family_household_change/images/fig-non-mhu-shortfall-rents.png"/>
+        <meta name="twitter:image:alt" content="Doubled-up households vs rent"/>
+        <meta name="twitter:card" content="summary_large_image"/>
+        <meta property="og:title" content="The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"/>
+        <meta property="og:description" content="We examine whether housing shortages can usefully explain household and family change."/>
+        <meta property="og:url" content="https://mountainmath.github.io/family_household_change/family_household_change/"/>
+        <meta property="og:image" content="https://mountainmath.github.io/family_household_change/images/fig-non-mhu-shortfall-rents.png"/>
+        <meta property="og:image:alt" content="Doubled-up households vs rent"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:locale" content="en_US"/>
+        <meta property="article:author" content="Nathan Lauster and Jens von Bergmann"/>
+title-meta: "The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"
+pagetitle: "The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"
+author-meta: "Nathanael Lauster, Jens von Bergmann"
+description-meta: "We examine whether housing shortages can usefully explain household and family change."
+---
+
+This is the code repository for the [The History of the Family ](https://doi.org/10.1080/1081602X.2024.2448986) paper 
+
+`Lauster, N., & von Bergmann, J. (2025). The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981–2021. The History of the Family, 1–30. https://doi.org/10.1080/1081602X.2024.2448986`
+
+This repository contains the paper and code to replicate the analysis.
+
+<dl>
+<dt>Version of Record</dt>
+<dd>
+<a type="button" href="https://doi.org/10.1080/1081602X.2024.2448986" class="btn btn-primary">View the published version</a>
+</dd>
+
+<dt>Preprints</dt>
+<dd>
+<a type="button" href="https://mountainmath.github.io/family_household_change/family_household_change.html" class="btn btn-success">View HTML preprint</a>
+</dd>
+<dd>
+<a type="button" href="https://mountainmath.github.io/family_household_change/family_household_change.pdf" class="btn btn-success">View PDF preprint</a>
+</dd>
+
+<dt>Code</dt>
+<dd>
+<a type="button" href="https://github.com/mountainMath/family_household_change/blob/main/munimum_household_units_in_canada.qmd" class="btn btn-info">View replication code</a>
+</dd>
+<dd>
+<a type="button" href="https://github.com/mountainMath/family_household_change" class="btn btn-info">View GitHub Repo</a>
+</dd>
+
+</dl>

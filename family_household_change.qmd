@@ -1,0 +1,1657 @@
+---
+title: "The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"
+author:
+  - name: Nathanael Lauster
+    corresponding: true
+    affiliations:
+      - UBC Department of Sociology
+  - name: Jens von Bergmann
+    affiliations:
+      - MountainMath Software and Analytics
+date: "Nov 20, 2024"
+doi: 10.1080/1081602X.2024.2448986
+abstract: '**The Version of Record of this manuscript has been published and is available in The History of the Family:**\newline<br>
+*Lauster, N., & von Bergmann, J. (2025). The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981–2021. The History of the Family, 1–30. [DOI: 10.1080/1081602X.2024.2448986](https://doi.org/10.1080/1081602X.2024.2448986)
+\newline<br>\newline<br>
+
+We examine whether housing shortages can usefully explain household and family change. We contextualize our investigation within the cultural history of emerging normative rules guiding both household formation and municipal regulatory practices within North America across the early Twentieth Century. We argue that encoding the new rules into bylaws has contributed to housing shortages since the late Twentieth Century. The uptake of new rules as cultural norms links housing shortages to household change. As a guideline, the new rules promote households broadly similar to Ermisch and Overton’s (1984) concept of minimal household units. To measure the relationship between housing shortage and household change, we gather data on rents and minimal household unit status across nine major metropolitan areas within Canada. We are able to establish a long timeline for rents from 1921-2021, but available census data limit our investigation into household change to the period from 1981-2021. Conceptualizing household change as being driven by a variety of factors we establish a robust relationship whereby lower rents sort more young adults (age 20-44) into minimal household units over this time period. The rising multiculturalism of Canada’s big cities complicates our interpretation of cultural rules, but the effects of housing shortages on assortment into minimal household units offers a robust explanation for recent historical change in families and households.'
+pagetitle: "The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"
+title-meta: "The new rules: housing shortage as an explanation for family and household change across large metro areas in Canada, 1981-2021"
+author-meta: "Nathanael Lauster, Jens von Bergmann"
+description-meta: "We examine whether housing shortages can usefully explain household and family change."
+image: "https://mountainmath.github.io/family_household_change/images/fig-model-culture-baseline-comparison-1.png"
+backgroundcolor: "#F8F4F0"
+fig-pos: "H"
+fig-width: 8
+fig-height: 6
+fig-dpi: 300
+dpi: 300
+fig-format: 'svg'
+format:
+  pdf:
+    papersize: letter
+    fontsize: 12pt
+    #toc: true
+    #lof: true
+    #lot: true
+    keep-tex: false
+    keep-md: false
+    lang: "en-CA"
+    documentclass: article   
+    fig-cap-location: bottom
+    tbl-cap-location: bottom
+    link-citations: true
+    number-sections: true
+    extra_dependencies: ["float"]
+    #output-ext: "pdf"
+    #toc-depth: 2
+    geometry: left=3cm,right=2cm,top=2cm,bottom=2cm
+    # template-partials: 
+    #   - title.tex
+    include-in-header:
+      - text: |
+          \usepackage{amsmath}
+          \usepackage{amssymb}    
+          \usepackage[noblocks]{authblk}
+          \renewcommand*{\Authsep}{, }
+          \renewcommand*{\Authand}{, }
+          \renewcommand*{\Authands}{, }
+          \renewcommand\Affilfont{\small}
+          \usepackage{soul}
+          \usepackage[dvipsnames]{xcolor}
+          \definecolor{mmcolour}{HTML}{F8F4F0}
+          \pagecolor{mmcolour}
+  html:
+    css: full_width_figures.css
+    embed-resources: true
+documentclass: article
+fontsize: 12pt
+biblio-style: authordate1
+bibliography: mhu.bib
+link-citations: true
+endnote: no
+editor: source
+execute:
+  echo: false
+  warning: false
+  message: false
+  cache: true
+---
+
+```{r setup, include=FALSE, cache.lazy=FALSE, cache=FALSE}
+library(tidyverse)
+library(cansim)
+library(canpumf)
+library(cancensus)
+library(mountainmathHelpers)
+source(here::here("R/census_import.R"))
+source(here::here("R/mhu_helpers.R"))
+extrafont::loadfonts()
+
+# mountainmathHelpers::theme_mm(background_colour = "white")
+
+main_ages <- c("20 to 24 years",
+               "25 to 29 years",
+               "30 to 34 years",
+               "35 to 39 years",
+               "40 to 44 years")
+age_colours <- setNames(RColorBrewer::brewer.pal(length(main_ages),"Set1"),main_ages)
+
+focus_cmas <- c("Toronto","Montréal","Vancouver","Ottawa – Gatineau",
+                "Calgary","Edmonton","Québec","Winnipeg","Hamilton")
+cma_colours <- setNames(c(RColorBrewer::brewer.pal(8,"Dark2"),"black"),focus_cmas)
+
+years <- supported_pumf_years
+year_colours=setNames(RColorBrewer::brewer.pal(length(years),"Spectral"),years)
+
+mhu_colours <- setNames(MetBrewer::met.brewer("Egypt",5),c("MHU1","MHU2","MHU3","MHU4","Non-MHU"))
+nmhu_colours <- setNames(MetBrewer::met.brewer("Juarez",6),c("Living with parents", "Living in multifamily household",
+                                                             "Living with roommates", "Living with relatives",
+                                                             "Living in complex household", "Other"))
+nmhu_colours2 <- setNames(MetBrewer::met.brewer("Juarez",6),
+                          c("With parents", "Multifamily household",
+                            "With roommates", "With relatives",
+                            "Complex household", "Other"))
+filter_school <- function(data) {
+  data |> filter(school!="Attending school") 
+}
+filter_baseline <- function(data) {
+  data |>
+    filter_school() |>
+    filter(VISMIN =="Not a visible minority") |>
+    filter(GEN %in% c("3G","2+G")) 
+}
+
+refresh_ate <- FALSE
+if (!dir.exists(here::here("data_cache"))) dir.create(here::here("data_cache"))
+```
+
+```{r pumf-data-and-cpi, cache.lazy=FALSE}
+cpi <- simpleCache(cansim::get_cansim_vector("v41690973") |>
+  filter(strftime(Date,"%m")=="05") |>
+  mutate(Year=strftime(Date,"%Y")) |>
+  select(Year,CPI=val_norm) |>
+  filter(Year<=2021) |>
+  mutate(CPI=CPI/last(CPI,order_by=Year)),
+  key="cpi_series.Rda",path=here::here("data_cache"))
+
+mhu_pumf_combined <- simpleCache(get_harmonized_pumf(supported_pumf_years,refresh=FALSE),
+                                 key="mhu_pumf_combined.Rda",path=here::here("data_cache"),
+                                 refresh=FALSE) |>
+  filter(HHTYPE!="Not applicable") |>
+  filter(HHCLASS=="Private household")
+
+```
+
+```{r rent-data, cache.lazy=FALSE}
+rents <- mhu_pumf_combined |>
+  #filter(MOB5M=="Mover") |>
+  filter(TENUR =="Renter",Maintainer=="Maintainer") |>
+  #filter(!(MOB1 %in% c("Not applicable","Not available","Non-movers"))) |>
+  filter(GROSRT<10000) |>
+  #summarize(Rent=weighted.mean(GROSRT,WEIGHT),.by=c(CMA,Year)) |>
+    summarize(Rent=spatstat.univar::weighted.median(GROSRT,WEIGHT),
+            Rent_q1=Hmisc::wtd.quantile(GROSRT,WEIGHT,probs=0.25),
+            Rent_b=bracket_median(GROSRT_lower,WEIGHT),
+            Rent_q1_b=bracket_median(GROSRT_lower,WEIGHT,quantile=0.25),
+            .by=c(CMA,Year)) |>
+  mutate(Rent=coalesce(Rent_b,Rent),
+         Rent_q1=coalesce(Rent_q1_b,Rent_q1)) |>
+  select(-Rent_b,-Rent_q1_b)
+
+rents_5 <- mhu_pumf_combined |>
+  filter(MOB5M=="Mover") |>
+  filter(TENUR =="Renter",Maintainer=="Maintainer") |>
+  #filter(!(MOB1 %in% c("Not applicable","Not available","Non-movers"))) |>
+  filter(GROSRT<10000) |>
+  #summarize(Rent=weighted.mean(GROSRT,WEIGHT),.by=c(CMA,Year)) |>
+  summarize(Rent=spatstat.univar::weighted.median(GROSRT,WEIGHT),
+            Rent_q1=Hmisc::wtd.quantile(GROSRT,WEIGHT,probs=0.25),
+            Rent_b=bracket_median(GROSRT_lower,WEIGHT),
+            Rent_q1_b=bracket_median(GROSRT_lower,WEIGHT,quantile=0.25),
+            .by=c(CMA,Year)) |>
+  mutate(Rent=coalesce(Rent_b,Rent),
+         Rent_q1=coalesce(Rent_q1_b,Rent_q1)) |>
+  select(-Rent_b,-Rent_q1_b)
+
+rents_n5 <- mhu_pumf_combined |>
+  filter(MOB5M=="Non-movers") |>
+  filter(TENUR =="Renter",Maintainer=="Maintainer") |>
+  #filter(!(MOB1 %in% c("Not applicable","Not available","Non-movers"))) |>
+  filter(GROSRT<10000) |>
+  #summarize(Rent=weighted.mean(GROSRT,WEIGHT),.by=c(CMA,Year)) |>
+  summarize(Rent=spatstat.univar::weighted.median(GROSRT,WEIGHT),
+            Rent_q1=Hmisc::wtd.quantile(GROSRT,WEIGHT,probs=0.25),
+            Rent_b=bracket_median(GROSRT_lower,WEIGHT),
+            Rent_q1_b=bracket_median(GROSRT_lower,WEIGHT,quantile=0.25),
+            .by=c(CMA,Year)) |>
+  mutate(Rent=coalesce(Rent_b,Rent),
+         Rent_q1=coalesce(Rent_q1_b,Rent_q1)) |>
+  select(-Rent_b,-Rent_q1_b)
+
+
+rents_1 <- mhu_pumf_combined |>
+  filter(MOB1M=="Mover") |>
+  filter(TENUR =="Renter",Maintainer=="Maintainer") |>
+  #filter(!(MOB1 %in% c("Not applicable","Not available","Non-movers"))) |>
+  filter(GROSRT<10000) |>
+  #summarize(Rent=weighted.mean(GROSRT,WEIGHT),.by=c(CMA,Year)) |>
+  summarize(Rent=spatstat.univar::weighted.median(GROSRT,WEIGHT),
+            Rent_q1=Hmisc::wtd.quantile(GROSRT,WEIGHT,probs=0.25),
+            Rent_b=bracket_median(GROSRT_lower,WEIGHT),
+            Rent_q1_b=bracket_median(GROSRT_lower,WEIGHT,quantile=0.25),
+            .by=c(CMA,Year)) |>
+  mutate(Rent=coalesce(Rent_b,Rent),
+         Rent_q1=coalesce(Rent_q1_b,Rent_q1)) |>
+  select(-Rent_b,-Rent_q1_b)
+
+all_rents <- bind_rows(
+  rents |> mutate(Type="All"),
+  rents_n5 |> mutate(Type="Non-movers 5"),
+  rents_5 |> mutate(Type="Movers 5"),
+  rents_1 |> mutate(Type="Movers 1")
+) |>
+  left_join(cpi,by="Year") |>
+  mutate(`Real rent`=Rent/CPI)
+
+cma_rents <- rents_5 |> 
+  full_join(rents_1,by=c("CMA","Year")) |>
+  mutate(Rent=coalesce(Rent.y,Rent.x),
+         Rent_q1=coalesce(Rent_q1.y,Rent_q1.x)) |>
+  left_join(cpi,by="Year") |>
+  mutate(`Real rent`=Rent/CPI,
+         `Real Q1 rent`=Rent_q1/CPI) |>
+  select(CMA,Year,Rent,Rent_q1,`Real rent`,`Real Q1 rent`)
+
+rents_1_2brm <- mhu_pumf_combined |> 
+  filter(!is.na(BEDRM),BEDRM=="2 bedrooms") |> 
+  filter(MOB1M=="Mover") |>
+  filter(TENUR =="Renter",Maintainer=="Maintainer") |>
+  #filter(!(MOB1 %in% c("Not applicable","Not available","Non-movers"))) |>
+  filter(GROSRT<10000) |>
+  #summarize(Rent=weighted.mean(GROSRT,WEIGHT),.by=c(CMA,Year)) |>
+  summarize(Rent=spatstat.univar::weighted.median(GROSRT,WEIGHT),
+            Rent_q1=Hmisc::wtd.quantile(GROSRT,WEIGHT,probs=0.25),
+            Rent_b=bracket_median(GROSRT_lower,WEIGHT),
+            Rent_q1_b=bracket_median(GROSRT_lower,WEIGHT,quantile=0.25),
+            .by=c(CMA,Year)) |>
+  mutate(Rent=coalesce(Rent_b,Rent),
+         Rent_q1=coalesce(Rent_q1_b,Rent_q1)) |>
+  select(-Rent_b,-Rent_q1_b)
+```
+
+```{r model-data, cache.lazy=FALSE}
+model_data <- mhu_pumf_combined |>
+  filter(AGEGRP %in% main_ages) |>
+  left_join(cma_rents,by=c("Year","CMA")) |>
+  filter(CMA %in% focus_cmas) |>
+  left_join(cpi,by="Year") |>
+  add_income() |>
+  mutate(real_income=Income/CPI/12,
+         real_rent=Rent/CPI,
+         real_rent_q1=Rent_q1/CPI) |>
+  mutate(Year=factor(Year) |> fct_rev()) |>
+  mutate(VM2=recode(VM,"Other visible minority"="Visible minority")) |>
+  mutate(Culture2=case_when(VM2 %in% c("Indigenous","Francophone") ~ VM2,
+                          TRUE ~ paste0(VM2,"_",IMM)))  |>
+  mutate(Culture2=factor(Culture2, levels=c("Not a visible minority_Non-Immigrant","Not a visible minority_Immigrant",
+                                          "Visible minority_Non-Immigrant","Visible minority_Immigrant","Francophone",
+                                          "Indigenous"))) |>
+  mutate(real_income=real_income/10000,
+         real_rent=real_rent/1000,
+         real_rent_q1=real_rent_q1/1000) |>
+  mutate(real_income=pmin(real_income,quantile(real_income,0.95)) |> pmax(0.05)) |>
+  mutate(Culture=fct_recode(Culture2, "Not a visible minority_Non-Immigrant"="Francophone"))
+
+
+income_ages <- c("25 to 29 years", "30 to 34 years", "35 to 39 years", "40 to 44 years", "45 to 49 years" , "50 to 54 years" , "55 to 59 years")
+incomes_data <- mhu_pumf_combined |>
+  filter(AGEGRP %in% income_ages) |>
+  filter_school() |>
+  #add_income() |>
+  #summarize(Income=spatstat.univar::weighted.median(Income,w=WEIGHT),.by=c(CMA,Year)) |>
+  summarize(Income=spatstat.univar::weighted.median(TOTINC,w=WEIGHT),.by=c(CMA,Year)) |>
+  left_join(cpi,by="Year") |>
+  mutate(cma_real_income=Income/CPI/12/10000) |>
+  select(CMA,Year,cma_real_income)
+
+model_data <- model_data |>
+  select(-any_of("mean_real_income")) |>
+  left_join(incomes_data,by=c("CMA","Year"))
+
+model_data_culture <- model_data |>
+  filter(GEN!="Other") 
+  
+
+model_data_baseline <- model_data |>
+  filter_baseline()
+
+
+logit_fit <- function(formula,data){
+  survey::svyglm(
+    formula = formula,
+    design = survey::svydesign(ids=~1, data=data, weights=~WEIGHT),
+    family=quasibinomial(link="logit"))
+}
+
+
+logit_fits_for_formula_by_age <- function(formula,data,ages=main_ages) {
+  ages |>
+    lapply(\(a){
+      logit_fit(formula,data=data|>filter(AGEGRP==a))
+      }) |>
+    set_names(ages) 
+}
+
+```
+
+\newpage
+
+Do housing shortages explain housing and family change? We take up this question for the relatively recent history of urban Canada. In posing the question, we frame it within the longer cultural history of emerging ideals about how family and households should hold together. Ideals can be codified in normative rules about households and families. As we discuss, these normative rules guide people's preferences, operating as cultural guidelines tying the forms taken by families and households to the availability of housing. At the same time, these normative rules also guide the variable emergence of planning practices and municipal bylaws, which in turn shape housing markets and can operate to produce housing shortages.
+
+Family and household change has often been explained with reference to either culture or material change. For instance, the influential theory of a Second Demographic Transition is explicitly promoted as post-material and driven by changing values [@lesthaeghe2010unfolding]. By contrast, our focus on housing shortage suggests a material orientation. But we couch our material orientation within a shifting set of culturally specific rules for how material circumstances matter to family formation. As a result, our explanation is not either/or with respect to cultural and material drivers of change, but instead inherently both. While we consider this a strength, as we discuss, the cultural specificity of our rules approach offers a challenge to interpreting their application within an increasingly multicultural context, like Canada.
+
+Overall, normative cultural rules offer a dramatically simplified but useful heuristic for understanding how culture and material circumstances can work together in offering potential explanations for historical change. In particular, if people generally adhere to sets of normative rules about household formation tying entry and form to the availability of some material substrate, then historical change can usefully be linked to changes in the material substrate, changes in the normative rules, or both. We briefly note how old rules-based explanations have been applied largely to agricultural regimes, where the availability of arable land often served as a key material substrate.
+
+Largely following the work of Ermisch & Overton (1984, 1985), we posit that new rules developed over the course of the early 20th Century within North American urban settings, where access to housing came to serve as a key material substrate. Correspondingly, variation in housing shortage since the late 20th Century explains much of the historical and geographical variation in family and household form. What's more, variation in housing shortage can be caused by the varying formalization of new normative rules within planning practices and their corresponding effects on housing stock given broader geographic constraints. After providing some background for this interpretation, we test the basic framework by assessing the historical relationship between household form, as measured by prevalence of minimal household units (MHU), and housing shortages, as measured by inflation-adjusted rents, from 1981-2021 across a sample of larger metropolitan areas of Canada, including Toronto, Montréal, Vancouver, Calgary, Edmonton, Ottawa, Hamilton, Winnipeg, and Québec City. Drawing upon PUMF data from Censuses, we provide a simple model to estimate the negative effect of housing shortages on adhering to normative household form. At the same time, we pay special attention to the role of culture in our estimation, insofar as our new normative rules are understood to be rooted in culture, and Canada has embraced a multicultural path over our period of interest.
+
+# Old Rules for Families and Households
+
+In primarily agricultural settings, rules for inheritance often governed whether and how land was passed between generations. Particular practices, especially the circulation of servants between households, have also been considered as varying by culture [@reher1998]. Debates over varying distributions of household types (stem, joint, nuclear) generally emphasize the primacy of varying cultural rules (e.g. @hajnal1982two) or underlying material circumstances, with the latter considered in terms of importance of agriculture, availability of land, and availability of kin (e.g. @ruggles2009reconsidering; @ruggles2010stem). Overall, the combination of rules and relative availability of resources provides a toolkit of sorts to explain variations. Given a stable base of land (and high background mortality), non-heirs could work for their families or circulate as servants and look for potential opportunities to become an inheritor. Given an expanding base of land, as with a frontier, non-heirs (and designated heirs as well) could look to obtain their own land and set up their own households. An expanding base of land could be expected to lead to fewer circulating servants as well as joint families and stem families, and more nuclear family households without any change to underlying cultural rules. Hence changes to the availability of land and changes to cultural rules could each have independent effects on how people distribute into families and households.
+
+Widespread industrial urbanization offered up a new frontier, but also altered both the cultural and material foundations for families and households. The resources to sustain a household gradually and unevenly moved outside of the household, albeit in gendered fashion, to various places of employment. Both land and rules governing its inheritance diminished in importance for most urban dwellers, but households still needed some form of housing. At the same time, urbanization led to a profusion of new cultural ideas. Did these become distilled into new rules for how people are likely to distribute into families and households? Given the underlying shift away from agriculture, can we observe new patterns of material constraint tied to these rules? Does land still matter through its relationship to housing, and if so, how?
+
+Our basic argument is that new rules have developed, and these now tie together family and households with housing. Furthermore, housing provides a continuing link to land, especially via various forms of regulation. Regulations, in turn, can contribute to housing shortages, which act as a primary limitation on family and household formation. The development of these rules was likely gradual and uneven, and in Canada we envision an unsettled period of early urbanization where a profusion of new family and household arrangements, especially including boarding and lodging, emerged. However, cultural rules developed in conjunction with various legal practices, including intensive bylaw regulation within cities, to settle new and relatively stable family and household expectations into place. Over time particularly urban constraints emerged in the form of housing shortages. Greater access to housing results in younger adults assorting into more single person, couple, single-parent, and coupled parent households. Housing shortages result in various alternatives to these arrangements, including joining up with roommates, remaining as dependents within their parental household, and a variety of other complex household forms.
+
+Housing shortages are best interpreted with respect to a given base of jobs, hence operating at a metropolitan level. Enabling easy access to the suburbs acted as a frontier, of sorts, when combined with the increasingly regulated housing options within cities. Correspondingly, the varying availability of land and the laws governing its use for housing can operate to produce housing shortages at a metropolitan level. Here we draw upon the literature to posit and refine the new rules for family and household organization and explore how the material constraints of housing shortage might work to distribute people into families and households given these rules.
+
+# New Rules for Families and Households
+
+Urbanization, especially through industrialization, resulted in important separations between home and workplace at the same time as it produced a new set of class relations. The middle class, in particular, developed an ideology of home that increasingly emphasized its privacy as a sanctuary from urban life, at the same time that it developed as a stage for middle class moral worth [@frykman1987culture; @gillis1997world; @hareven1991home; @ward1999history]. The servants of the wealthy and the boarders and lodgers most associated with the poor were increasingly frowned upon and, at least in the latter case, directly regulated against [@modell1973urbanization].
+
+Across the emerging cities of Canada's early history, lodging situations fell and rose again and remained relatively common through the tumult of the early 20th Century. As recorded within the 1931 Census, roughly 20% to a little over 30% of households contained lodgers in Canada's big cities. The practice of taking in lodgers was most common in Toronto, where the development of apartment buildings had been heavily restricted in 1912 (@harris1992end). In this sense, lodging can be considered a response to housing shortage, but it also may have been bound up with a continuation of older boarding practices, where food preparation and other services were also shared, and where unattached adults, in particular, were thought best housed with families or similar arrangements geared to preserve their virtue [@harris1994flexible; @kirkland2006home]. In that sense, both boarding and lodging practices may be understood to operate sort of like intermediaries to older practices involving the circulation of servants [@reher1998]. As workplaces became formalized outside of the home, unattached workers still circulated within the homes left behind. But the character of the home was changing as well. Lodging declined dramatically after WWII, and fewer than 20% of households contained lodgers in all big cities except Toronto (where the continuing prevalence of lodging may have also related to a shift in Census coding, see @harris1994flexible). By 1961 lodging dropped further, practiced by fewer than 15% of households even for Toronto, with most cities below 10%, as recorded within Census reports. Lodging has not re-emerged as a major trend, suggesting how the rules embedding unattached individuals within private family households have changed.
+
+Painting in broad strokes, the transformation of the home into an increasingly private realm arose in conjunction with the transformation of marriage from a patriarchal, public, and often compulsory heterosexual arrangement oriented toward duty into a more egalitarian, private, companionate and ultimately optional arrangement oriented toward personal and social fulfillment [@frykman1987culture; @gillis1997world]. Much like marital partners, children transformed from a familial duty and source of labour into a similar source of personal and social fulfillment and focus of intensive parenting [@hays1996cultural; @zelizer1994pricing]. At the same time, a variety of dwelling types and services were increasingly on offer within cities, enabling people to find accommodation, entertainment, and fulfillment on their own. The lifting of patriarchal controls over women increasingly allowed their fuller participation in this process [@kirkland2006home]. Correspondingly, older children had fewer obligations to live within their parental homes and more opportunities and expectations to set up their own households outside of lodging arrangements [@kobrin1976fall]. While living alone offered the greatest privacy and freedom for self-exploration, including as an emerging adult [@arnett2000emerging], being part of a couple and being a parent could balance loss of privacy and the need to negotiate with others over shared spaces against personal and social fulfillment.
+
+The rise of household headship combines the rise of couples and singles (or primary individuals as per @kobrin1976fall). Between 1941 and 1971, headship rates rose for those age 35-44 to the point where most couples, at the very least, could head their own household. Headship rates also more than doubled for those under age 35, including both couples and young people living on their own. But the Census also changed the way it measured headship, with the definition narrowing by 1951 so that two couples dividing up a single house, for instance, could no longer be considered separate households unless spaces were clearly separated (see @harris1994flexible). Similarly, headship remains a complicated measure of changing rules insofar as it combines patterns in coupling with patterns of living singly, with differing implications for expected headship rates. As a result, headship rates don't fully capture the new rules linking availability of housing to household and family form [@verdon1998rethinking]. Fortunately another theoretical concept better captures the rules emerging through the mid-Twentieth Century: the Minimal Household Unit.
+
+# Minimal Household Units
+
+Emerging household rules prioritized living together for couples, parents and their dependent children. These relationships can be used to divide up households into Minimal Household Units (MHU) as described by Ermisch & Overton (1984; 1985). Without prioritizing any one destination, Ermisch & Overton describe four basic MHU living arrangements:
+
+*   living alone (MHU1), 
+*   living as a single parent of dependent child(ren) (MHU2), 
+*   living as a couple without children (MHU3), and 
+*   living as a couple with dependent child(ren) (MHU4), 
+
+as the basic normative building blocks of households. While initially configured as a "married" couple, MHU3 and MHU4 can easily incorporate living together in common-law relationships. Dependence is a more malleable concept, definable in terms of age of children (e.g. 16+, 18+, 20+, 25+), tied to status as a non-student, or considering other means of capability for independence and emergence as an adult [@arnett2000emerging].
+
+The usefulness of the MHU concept returns us to housing [@ermisch1984minimal; @ermisch1985minimal]. Would a given household be likely to subdivide into two if they were offered a free additional dwelling nearby? The intuitive response is that it depends upon the relationships within the household. Cohabitation requires a degree of negotiation and mutual accommodation over shared spaces, daily activities, and homemaking tasks, all of which can be stressful. At the same time, cohabitation can bring pleasure and reduce loneliness. In addition, some forms of cohabitation are socially stigmatized, while others fulfill social obligations and cultural expectations [@glick2011does]. On balance of pleasures, stressors, social stigmatization and obligation, we can make a rough guess at differentiating types of relationships defining households that would stay together if offered a free additional dwelling (see, e.g. [@burch1987household] for a fuller discussion). These households, in turn, can be defined as Minimal Household Units (MHU).
+
+# Rules and Regulations and the Production of Housing Shortage
+
+The culturally informed logics guiding normative MHU rules also became encoded within rapidly expanding regulations and guidelines. At the federal level, guidelines leading to the Canadian National Occupancy Standards encoded ideas about who should live together and how many bedrooms were needed for various household types, and these would be influential in public and social housing allotment determining who could live together and where [@lauster2010culture; @mckay2022policy]. But overall, Canada's housing stock remained overwhelmingly private, and determined far more by local bylaws and planning practices variously enabled by the provinces. Municipalities began to define dwellings as for single families only [@lauster2016death]. Family, in turn, was defined along lines of marriage, blood, or adoption, a definition that remains enshrined in municipal bylaws in BC (though municipal powers to define family were overturned in Ontario). To head off legal challenges, policy carve outs often enable some variations, for instance enabling up to three unrelated individuals to be considered a family, as in Vancouver. In addition, they often allow boarding and lodging, but also strictly limit the number of boarders and lodgers that can be taken in (in Vancouver's case the maximum is two). Similar bylaws developed across a number of other municipal governments, subject to varying oversight by provincial legislation and authority. Defining various occupancy rules concerning the sharing of dwellings was key in making larger-scale boarding and lodging houses illegal, or at the least exceptional (e.g. @valverde2012), as well as combating the practice of "doubling up" that had been so common in Toronto [@harris1994flexible].
+
+Apartment buildings also became a target of municipal bylaws through the early 20th Century, targeted by a variety of measures culminating in strict zoning [@dennis2000zoning]. Emerging planning practices converged in many ways, particularly through the reservation of large swathes of suburban land for single-family detached zoning across Anglophone Canada [@lauster2016death]. But planning practice diverged in many other regards, leaving an uneven metropolitan landscape. Mid-century modernization of zoning bylaws tended to enable high-rises in some cities, but not others. Where allowed, high rises were often strictly limited their placement, with new construction tending to occur in the limited areas already previously occupied by low-rise apartment buildings. These regulatory patterns made the size of pre-zoning apartment stock especially important to the future of cities, to the benefit of renters in older metropolitan areas, like Québec and Montréal. Historically, it seems the Francophone community within Montréal may have also invested heavily into apartments as a result of being excluded from alternative investment opportunities [@choko1990local]. For Anglophone dominated big cities, strict limits to densification together with development of freeway infrastructure tended to push new growth outward.
+
+The 1970s witnessed a new backlash to growth in many areas, introducing new forms of variation into planning practice. In the City of Vancouver, new bylaws downzoned areas where towers had previously been allowed. The regional planning body for Metro Vancouver promoted growth control as a new goal, and the Agricultural Land Reserve (ALR) was put in place by a growth skeptical government at the provincial level [@garrish2002unscrambling]. The ALR, in particular, constrained further outward growth for Metro Vancouver, already geographically limited by the Salish Sea and existing protections against development across the North Shore mountains. Near Toronto, Lake Ontario also acted as a geographic barrier to growth, and new protections were installed against development of the Niagara Escarpment in 1973. But these wouldn't be further expanded into protections approximating the ALR until between 2001 and 2005 when the Greenbelt was put in place.
+
+In short, if metropolitan areas across Canada already varied by planning, geographic constraint and size of old housing stock by the 1970s, afterward there is strong reason to believe they came to vary even more by new planning practices and regulations. Indeed, the Canada Mortgage and Housing Corporation has reported that supply elasticity - the extent to which new housing is added in response to high prices - is much lower in Vancouver and Toronto than other major metropolitan areas in Canada [@cmhc_escalating_prices_2018]. The varying interplay of regulations with geography and the size of old housing stock likely explain much of this variation. The rise of housing regulation can be traced back to cultural logics arising within planning and municipal bylaws prioritizing new rules for how people should live. These often forbade older forms and modes of dwelling as part of raising living standards, and strongly favoured the rise of single-family detached [@lauster2016death]. At the same time, an emerging environmental ethos eventually sought to control further outward sprawl. As a result, the metropolitan landscape of Canada increasingly varied in the extent to which housing shortage became entrenched.
+
+# Metropolitan Variation in Rents
+
+The effects of entrenched housing shortage are likely most evident and most consequential in the varying rents across Metropolitan Areas. We can draw from published Census tables to provide a long timeline of rents (see @fig-cma-rent-long-timeline). In 1921 through 1941, these are measured as weighted median cash rents for large cities. For 1921-1931, in particular, rents are limited to those paid by certain types of "normal" families. From 1951 through 1971, we switch to weighted median cash rents for Census Metropolitan Areas (CMAs), as determined by Census. For 1981 onward, we match up our timeline to the gross rents from PUMF files, discussed in more detail below.
+
+Measured in terms of real rents (adjusting for inflation to 2021 dollars), the historical record shows a compression of rents after 1921, continuing through the Great Depression, WWII, and its immediate aftermath. Real rents then rose strongly for all metropolitan areas between 1951-1971. Afterward, rents generally returned to a more gradual rise up until 2006. Then real rents rose quickly once more from 2011-2021, across the aftermath of the Great Recession.
+
+Some metropolitan areas remain relatively stable in their ranking. Toronto and Ottawa have a long history of rents near the top, extending at least from 1921 to the present, while Montréal and Québec City tend toward the lowest rents. The relative rents of other metropolitan areas vary over the years. Winnipeg dropped from the highest rent in 1921 to a middle to lower ranking. Vancouver moved in the opposite direction, from middle of the pack to surpass Toronto and Ottawa between 1971 and 1981. Meanwhile, Calgary and Edmonton climbed even higher over that time before dropping back toward the middle by 1986, their fortunes likely linked in part to oil booms and busts. Hamilton has made a dramatic recent rise, as its market became increasingly integrated with Toronto's. Also notable is the generally widening variation in rents between metropolitan areas in recent years. Where a renter might expect to pay less than 50% more for cash rent in Toronto than in Québec City in 1991, Toronto (and Vancouver) rents nearly doubled those of Québec City by 2021.
+
+```{r fig-cma-rent-long-timeline, fig.height=5}
+#| fig-cap: "Real median rents are estimated at the CMA level from PUMF data 1981-2021, using the numerical goss rent distribution in newer PUMF and estimated from gross rent brackets for older PUMF. Data prior to 1981 is taken from census profile data tables and estimated from cash rent brackets."
+
+old_rents <- read_old_census_rents()
+
+rent_cleaned <- old_rents |> 
+      filter(!grepl("TOTAL|Median|Average|No_Cash|Total|unspec|Not_Specified",Range),
+             Range!="$0") |>
+      arrange(Year,Place,Value_lower) |>
+      summarize(Rent=bracket_median(Value_lower,value),
+                Rent_q1=bracket_median(Value_lower,value,quantile=0.25),
+                .by=c(Place,Geography,Year)) |>
+      rename(CMA=Place) 
+      
+ 
+rent_timeline <- rent_cleaned |> 
+  bind_rows(rents) |> 
+  filter(CMA %in% focus_cmas) |> 
+      left_join(cpi,by="Year") |>
+      mutate(`Real rent`=Rent/CPI,
+             `Real Q1 rent`=Rent_q1/CPI) |> 
+  mutate(Date=as.Date(paste0(Year,"-01-01"))) %>%
+  mutate(CMA=factor(CMA,levels=filter(.,Year=="2021") |> arrange(-`Real rent`) |> pull(CMA))) 
+
+
+ggplot(rent_timeline,aes(x=Date,y=`Real rent`,colour=CMA,group=CMA)) + 
+  geom_point(shape=21) +
+  geom_line() + 
+  scale_x_date(date_labels = "%Y", breaks = as.Date(paste0(seq(1911,2021,10),"-01-01"))) +
+  scale_y_continuous(labels=scales::dollar,breaks=seq(100,3000,100)) + 
+  scale_colour_manual(values=cma_colours) +
+  labs(title="Long timelines of real median rents in Canadian CMAs",
+       subtitle="(Varying geography as census regions change over time, in early years based on Census Districts)",
+       x=NULL,
+       y="Real median rent (2021 dollars)",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals), 1931-1971 census profile data") 
+```
+
+
+
+# Data sources and preparation for analysis
+
+While we can gather long timelines for rents, as above, the rental data from published tables is not ideal for analysis, as we describe further below. Moreover, we are unable to gather high quality data on our key Minimal Household Unit concept prior to 1981. For this reason, we turn to the 1981-2021 Canadian Census PUMF data provided by StatCan for most of the rest of our analysis below. The PUMF data offer roughly a 2% sample of the population, depending on the year, with data gathered every five years. The data is parsed and labelled using the `canpumf` R package [@R-canpumf]. We then filter to only include the population in private households and with valid *Household Type*. We describe our process for data harmonization below.
+
+## Data harmonization
+
+Data across census years is harmonized in several steps, including the following:
+
+-   Sorting the data into uniform 5-year age groups
+-   Harmonizing *Household class* to distinguish private from other households.
+-   Harmonizing CMA labels
+-   Harmonizing *Household size* and *Census family size* variables
+-   Estimating MHU status from *Household type* and *Census family structure* fields. This can be done fairly consistently for all censuses except 2006, 1986, and 1981. Dependent children in census families living with parents are considered to not be in minimal household units, but their parents are.
+-   Estimating MHU status from *Household size* and *Census family size* fields, using *Census family structure* to detect dependent children.
+-   Coding 5-year mobility status, and where available 1-year mobility status to flag anyone who moved in the preceding 5 years, or preceding year, respectively.
+-   Coding 5-year mobility status to flag anyone who lived in a different Census District 5 years prior.
+-   Estimating *Census family income* from income brackets by taking the median of the bracket.
+-   Estimating couple status (married or common law) by harmonizing the marital or common law status of individuals.
+-   Harmonizing *Indigenous/Aboriginal identity* status for the years where this is available and supplementing it by using *Ethnic origin* for 1991 and 1986, noting proxies aren't available for 1981.
+-   Harmonizing visible minority status by grouping into broad categories.
+-   Harmonizing *Generational/immigrant status* by distinguishing immigrants and non-permanent residents, second generation with both parents born outside of Canada, second generation with one parents born inside and one outside of Canada, and third or more generation Canadians. For 1981 and 1986 information to distinguish second and third generation is not available.
+-   Harmonizing school attendance, noting data on school attendance is not available for 1986.
+-   Categorizing people in MHU households into MHU1-4 categories using *Household type* and *Census family status*.
+-   Categorizing people in non-MHU households into categories using *Household type* and *Census family status*.
+-   Estimating income available to a person as the total individual income if the person is not in a couple relationship and the census family income if the person is in a couple relationship.
+
+Further, we estimate median rents and median incomes by taking point estimates where available and assuming a uniform distribution within rent or income brackets where the data is supplied as brackets.
+
+# Metropolitan Variation in Housing Shortage
+
+Our long timeline for median cash rents, extending from 1921 through 2021, establishes both historical and geographical variation across CMAs, but a few complications reduce the effectiveness of this variable as a comparative measure of housing shortage. Not all rents are equal in terms of what is included (e.g. heat, electricity) with important shifts between CMAs, suggesting gross rent would offer more comparability than cash rents. The quality of rentals also varies, likely with greater variation over time as older units became replaced and housing standards rose dramatically, especially from 1951 onward. We examine limited impacts of distributional and quality effects in Appendix -@sec-rent-quantiles-bedrooms. Moreover, there is important historical and geographic variation in the application of rent controls. Rents in 1941 were governed by wartime rent controls in many (but not all) big cities. Federal rent controls were lifted and power over rental regulations largely returned to provinces after WWII. Many provinces imposed rent controls in the 1970s, only to lift them once again in later years, and reimpose them once more as different governments came in to power. At present, Québec, Ontario, Manitoba, and British Columbia all have versions of rent control. These generally (but not always) enable rent hikes between tenants. In order for our measurement of rents to reflect housing shortage, we need to measure the rents of more recent tenancies rather than long-term tenancies. For 1981 and 1986, we limit our rent measures to tenancies turning over within the last 5 years. For 1991 and beyond, we limit our rent measures to tenancies turning over within the last year. We demonstrate the variation this produces in @fig-rent-mobility.
+
+```{r fig-rent-mobility, fig.height=5}
+#| fig-cap: "Real median rents of all renter households, renter households where the household maintainer moved within the 5 years preceeding the census, and renter households where the household maintainer moved within 1 year preceeding the census. Additionally we show rents of households who have not moved in the preceding 5 years. Rents of movers are generally higher than those of all renters, especially in metro areas and during times when rent control is in place."
+
+all_rents |> 
+  filter(CMA %in% focus_cmas) |>
+  left_join(cpi,by="Year") |>
+  # filter(CMA %in% c("Edmonton","Montréal","Ottawa – Gatineau",
+  #                   "Québec","Hamilton")) |>
+  ggplot(aes(x=Year,y=`Real rent`,colour=Type,group=Type)) +
+  geom_point(shape=21) +
+  geom_line() +
+  scale_colour_manual(values=MetBrewer::met.brewer("Egypt",4)) +
+  facet_wrap(~CMA) +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(#trans="log",
+                     #breaks=c(200,300,400,500,600,700,800,900,1000,1250,1500,2000),
+                     breaks=seq(0,2500,250),
+                     labels = scales::dollar) +
+  labs(title="Comparison of median rent by mobility status",
+       y="Real median rent (2021 dollars)",
+       x=NULL, colour="Rent sample",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+
+```
+
+In most CMAs, recent movers face higher rents than longer term tenants, though the degree to which this is true varies by year in ways that likely reflect variations in rent control policies and their application, as well broader housing market conditions determening how binding rent control is. Unsurprisingly, median rents for recent movers match median rents for all tenants most closely in Calgary and Edmonton, the CMAs without rent control.
+
+
+It is useful to complement the real rent timelines by deflating rents by incomes instead of the CPI as shown in @fig-rent-income-ratio. Here we use incomes of the population aged 25 to 44 matching the focus of this study.
+
+
+```{r fig-rent-income-ratio, fig.height=4}
+#| fig-cap: Rent to income ratios for Canadian metro areas are estimated using median total income for the population aged 25 to 44, including zeros, to reflect income available to our main population of interest. 20 to 24 year olds were excluded to guard against impacts of trends of increasing education and delayed entry into the workforce. Data availability in early years is limited.
+
+  
+income_ages2 <- c("25 to 29 years", "30 to 34 years", "35 to 39 years", "40 to 44 years")
+
+income_1971 <-  get_pumf_1971() |>
+  filter(HHCLASS=="Private household") |>
+  filter(AGEGRP %in% income_ages2) |>
+  mutate(TOTINC=coalesce(TOTINC,0)) |>
+  mutate(Year="1971",WEIGHT=50) |>
+  summarize(Income=spatstat.univar::weighted.median(TOTINC,w=WEIGHT),.by=c(CMA,Year)) |>
+  left_join(cpi,by="Year") |>
+  mutate(cma_real_income3=Income/CPI/12/10000) |>
+  select(CMA,Year,cma_real_income3)
+
+incomes_data3 <- mhu_pumf_combined |>
+  filter(AGEGRP %in% income_ages2) |>
+  filter_school() |>
+  mutate(TOTINC=coalesce(TOTINC,0)) |>
+  summarize(Income=spatstat.univar::weighted.median(TOTINC,w=WEIGHT),.by=c(CMA,Year)) |>
+  left_join(cpi,by="Year") |>
+  mutate(cma_real_income3=Income/CPI/12/10000) |>
+  select(CMA,Year,cma_real_income3) |>
+  bind_rows(income_1971)
+
+rent_income_data <- rent_timeline |>
+  inner_join(incomes_data3,by=c("CMA","Year")) |>
+  mutate(real_monthly_income3=cma_real_income3*10000) |>
+  mutate(rent_income3=`Real rent`/real_monthly_income3)
+
+rent_income_data %>%
+  mutate(CMA=factor(CMA,levels=filter(.,Year=="2021") |> arrange(rent_income3) |> pull(CMA))) |>
+  ggplot(aes(x=as.integer(Year),y=rent_income3,color=CMA,group=CMA))+
+  geom_point(shape=21) +
+  geom_line()+
+  scale_colour_manual(values=cma_colours) +
+  guides(colour=guide_legend(reverse=TRUE))+
+  scale_x_continuous(breaks=c(1971,seq(1981,2021,5))) +
+  labs(title="Rent to income ratio over time by CMA",
+       x=NULL,
+       y="Rent to income ratio\n(median total income of 25 to 44 year olds, including zeros)",
+       caption="StatCan Census PUMF 1971 through 2021 (individuals)")
+```
+
+Adjusting rent by income further illustrates broadly deteriorating affordability in many Canadian metro areas, with Montréal and Quebec City metro areas being notable exceptions. Of note, 2021 income data is impacted by pandemic income supports and associated affordability gains are likely temporary.^[The choice of income measure is somewhat arbitrary, but it's important to not use household income as this fixes households and thus blinds us to the very relationship between rents and household formation that we are interested in, introducing collider bias.]
+
+
+
+# Metropolitan Variation in MHU Status
+
+The metropolitan variation in rents from 1981 onward is sufficient to observe the effects of relative housing shortages at the CMA level. We use the PUMF data to get similar timelines for how households are assorted into those matching Minimal Household Units (MHU) and those adopting other configurations. Constructing MHU involves refining tables for Census Household Type and Census Family Status, and applying these to individuals by age category. PUMF data allows us to estimate MHU by type and age back to 1981, matching our rent data, but we are limited from going further back.
+
+The main variables used for classification into MHUs are the HHTYPE and CFSTAT fields, which encode the census family role and household type of each individual. For several censuses, in particular the 2006 census but also the 1986 and 1981 censuses, the household type variable does not cleanly distinguish between households of census families with or without additional persons. To overcome this we additionally draw upon the household size and census family size variables to detect households with additional persons. This may cause slight inconsistencies, in particular for 2006 but also for 1986 and 1981 data compared to the other years.
+
+```{r fig-mhu-share, fig.height=6.2}
+#| fig-cap: "Share of individuals in MHU by MHU category, age group and CMA, 1981-2021."
+
+mhu_pumf_combined |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  summarize(WEIGHT=sum(WEIGHT),.by=c(Year,MHU_cat,AGEGRP,CMA)) |>
+  mutate(Share=WEIGHT/sum(WEIGHT),.by=c(Year,AGEGRP,CMA)) |>
+  filter(MHU_cat!="Non-MHU") |>
+  mutate(CMA=recode(CMA,"Ottawa – Gatineau"="Ottawa-Gat.")) |>
+  ggplot(aes(x=Year,y=Share,fill=MHU_cat))+
+  geom_bar(stat="identity") +
+  scale_fill_manual(values=mhu_colours) +
+  facet_grid(AGEGRP~CMA)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        legend.position = "bottom")+
+  scale_y_continuous(labels=scales::percent) +
+  labs(title="Share of population in MHUs by age group",
+       x=NULL,
+       y="Share of population",
+       fill="MHU category",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+```
+
+In most Metropolitan Areas, the share of the population within MHU has declined. The decline is especially evident within the younger age ranges. Within some CMAs, especially Toronto and Vancouver, the decline extends to older ages as well. For Québec City metro area, by contrast, there appears to be no sustained decline in MHU at any age group, and indeed, the share within MHU appears to be growing across recent years. For younger ages, the decline in MHU households appears driven by MHU4. This matches with the general delay in childbearing. In metro Québec, MHU4 households at younger ages have simply been replaced by MHU1 and MHU3 households. The same is generally true for Montréal at older ages. Both cities also have slightly higher proportions of MHU2 (single parent) households for older adults. Elsewhere, any rise in other MHU types fails to make up for the decline in MHU4. Instead it appears that people have increasingly moved out of MHU altogether.
+
+Transitions between household types could be considered independently, but this risks missing overall rule-based patterns, as emerge where metro Québec simply substitutes one type of MHU household for others, while in other cities MHU households have declined overall. Where have people gone instead? In @fig-non-mhu-share, we flip to looking at what kind of households have risen for those outside of MHU by age group and CMA.
+
+```{r fig-non-mhu-share, fig.height=6.2}
+#| fig-cap: "Share of individuals not in MHU by non-MHU category, age group and CMA, 1981-2021."
+
+NMHU_cat_recodes <- c(
+  "With parents"="Living with parents",
+  "Multifamily household"="Living in multifamily household",
+  "With roommates"="Living with roommates",
+  "With relatives"="Living with relatives",
+  "Complex household"="Living in complex household"
+)
+
+mhu_pumf_combined |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  filter(NMHU_cat!="Other") |>
+  summarize(WEIGHT=sum(WEIGHT),.by=c(Year,NMHU_cat,AGEGRP,CMA)) |>
+  mutate(Share=WEIGHT/sum(WEIGHT),.by=c(Year,AGEGRP,CMA)) |>
+  filter(NMHU_cat!="MHU") |>
+  mutate(NMHU_cat=fct_recode(NMHU_cat,!!!NMHU_cat_recodes)) |>
+  mutate(CMA=recode(CMA,"Ottawa – Gatineau"="Ottawa-Gat.")) |>
+  ggplot(aes(x=Year,y=Share,fill=NMHU_cat))+
+  geom_bar(stat="identity") +
+  facet_grid(AGEGRP~CMA)+
+  scale_fill_manual(values=nmhu_colours2) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        legend.position = "bottom")+
+  scale_y_continuous(labels=scales::percent) +
+  labs(title="Share of population not in MHUs by age group",
+       x=NULL,
+       y="Share of population",
+       fill="Living arrangement",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+```
+
+For younger age ranges, the rise in non-MHU households has been led by children remaining in their parental home. Nevertheless, other type of non-MHU arrangements have also risen. Increasing proportions of people, especially within older age ranges, live in multifamily households, or with roommates, or in complex households. By contrast, the trend is the opposite within metro Québec. A declining proportion of people live as children within their parental household, as roommates, or as part of complex households. Comparing across metropolitan areas, it remains too simplistic to argue that the rise in non-MHU living overall is simply the result of children living within their parental homes longer. As with MHU households, it is useful to consider the rise in non-MHU households holistically. <!--In [Appendix -@sec-descriptive-non-MHU-breakdowns] we cross-tabulate non-MHU status in the most recent two censuses with other variables for further context.-->
+
+Returning to those within MHU, we can also compare metropolitan areas within age groups. Here we combine all households comprised only of MHU together, as shown in @fig-mhu-timeline-cma. For those age 20-24, all CMAs show a drop in MHU from 1981, but Québec City metro area partially recovers from this drop. The trend for Québec City is also notable for every other age range, insofar as the proportion within MHU remains stable or even climbs. For most other metropolitan areas, the proportion in MHU at each age tends to fall. Toronto and Vancouver lead in this regard, with a dramatically lower proportion of each age group located within MHU households over time.
+
+```{r fig-mhu-timeline-cma, fig.height=4}
+#| fig-cap: "Timelines of the share of individuals in MHU by CMA and age group, 1981-2021."
+
+mhu_pumf_combined |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  summarize(WEIGHT=sum(WEIGHT),.by=c(Year,MHU,AGEGRP,CMA)) |>
+  mutate(Share=WEIGHT/sum(WEIGHT),.by=c(Year,AGEGRP,CMA)) |>
+  filter(MHU) |>
+  ggplot(aes(x=Year,y=Share,colour=CMA,group=CMA))+
+  geom_point(shape=21) +
+  geom_line() +
+  scale_color_manual(values=cma_colours) +
+  scale_y_continuous(labels=scales::percent) +
+  facet_wrap(~AGEGRP,nrow=1)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        legend.position = "bottom")+
+  labs(title="Share of population in MHUs by age group",
+       x=NULL,
+       y="Share of population",
+       colour="Metro area",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+```
+
+Given that we see relatively widespread historical and geographic variation in real rents and similar widespread variation in minimal household units, we can correlate the two within each age group. We remove students from this simple correlation, both because students are often considered dependents, and because the household status of students is often ambiguously recorded within the Census.
+
+```{r fig-rent-MHU, fig.height=4}
+#| fig-cap: "Correlation between real rent and MHU by age group across CMAs and years, 1981-2021."
+
+rent_mhu_data <- model_data |>
+  filter_school() |>
+  summarize(n=sum(WEIGHT),
+            across(c(Rent_q1,Rent,CPI,real_rent,real_income,real_rent_q1),mean),
+            Income=median(Income),
+            .by=c(Year,AGEGRP,MHU,CMA)) |>
+  mutate(Share=n/sum(n),.by=c(Year,AGEGRP,CMA)) |>
+  filter(MHU)
+
+
+
+rent_mhu_data |>
+  filter(AGEGRP %in% main_ages) |>
+  ggplot(aes(x=Rent/CPI,y=Share)) +
+  geom_point(shape=21,aes(colour=CMA)) +
+  geom_smooth(method="lm",formula=y~x,colour="black") +
+  scale_x_continuous(labels = \(x)scales::dollar(x,scale=10^-3,suffix="k",accuracy=0.1)) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_colour_manual(values=cma_colours) +
+  facet_wrap(~AGEGRP,nrow=1) +
+  theme(legend.position = "bottom") +
+  labs(title="MHU shares vs median rent across metro areas and years",
+       subtitle="(people not attending school)",
+       x="Median real rent (2021 dollars)",
+       y="Share in MHU")
+  
+```
+
+The results demonstrate a clear relationship. As rents go up, the proportion living in minimal household units goes down, and this relationship carries across all age groups. This ties the economic measures of housing shortage given by high rents to the demographic measure of household adaptation. But is this a causal relationship? What is the effect of housing shortage on living outside of minimal household units? To answer these questions, we look to establish a causal framework where we can try and pull out this effect.
+
+# Causal framework
+
+We place our relationship of interest within a broader model of the causal mechanisms behind household formation. Estimating this from observational data requires strong assumptions that may not always hold. In this section we lay out out the assumptions of our modelling and discuss their shortcomings.
+
+The most important determinant of MHU status is age. We are primarily interested in the 20 to 44 year old age range where we have fairly robust methods to determine the MHU status of individuals. Students are a complicating factor, especially within the age 20 to 24 range, insofar as they are reasonably considered dependents upon their parents, and often considered "emerging adults" in this range [@arnett2000emerging]. Moreover there are complications in how they are assigned to their usual place of residence, and thus how their household and family status gets coded in the census. As above, we will pay special attention to this by at times removing part and full time students from the analysis to assess the effect of this on our results. Otherwise we proceed by simply dividing age group into five year intervals, as in descriptive results in @fig-rent-MHU. While patterns may be influenced by within age-group variation in cohort size, overall we do not expect these effects to be large or consequential drivers of historical change.
+
+Beyond age, our model assumes that the rent variation individuals experience is produced by their locations within our nine CMAs. But other factors are measured at the individual level within PUMF data, including an individual's gender, their income, their couple status, whether they are a recent mover into the housing market, and finally, what we term their "culture".
+
+```{r fig-mhu-model-full, fig.height=5}
+#| fig-cap: "Conceptual model of the determinants of MHU status, focusing on the main economic and social causal pathways. Wealth is unobserved an an uncontrolled confounder interacting with culture."
+
+mv_vertices <- tibble(Name=c("CMA",
+                             "Rent",
+                             "Income", 
+                             "Couple",
+                             "Culture",
+                             "MHU",
+                             "Gender",
+                             "Moved CD",
+                             "Wealth"),
+                      x=c(0,1,1,1.5,0.5,2,2,2,0.5),
+                      y=c(2,2,-1,0.5,0.5,2,-1,3.5,3.5))
+
+mv_edges <- bind_rows(
+  tibble(x=0.12,y=2,xend=0.88,yend=2,colour="black",curvature=0,comment = "CMA -> Rent"),
+  tibble(x=1.12,y=2,xend=1.88,yend=2,colour="black",curvature=0,comment = "Rent -> MHU"),
+  tibble(x=1.2,y=-0.9,xend=1.95,yend=1.8,colour="black",curvature=0.3,comment = "Income -> MHU"),
+  tibble(x=1.45,y=0.3,xend=1.05,yend=-0.8,colour="black",curvature=0,comment = "Couple -> Income"),
+  tibble(x=1.55,y=0.7,xend=1.92,yend=1.75,colour="black",curvature=0,comment = "Couple -> MHU"),
+  tibble(x=0.6,y=0.65,xend=1.9,yend=1.85,colour="black",curvature=0,comment = "Culture -> MHU"),
+  tibble(x=0.35,y=0.5,xend=0.04,yend=1.8,colour="black",curvature=0,comment = "Culture -> CMA"),
+  tibble(x=0.65,y=0.5,xend=1.35,yend=0.5,colour="black",curvature=0,comment = "Culture -> Couple"),
+  tibble(x=0.55,y=0.35,xend=0.9,yend=-0.8,colour="black",curvature=0,comment = "Culture -> Income"),
+  tibble(x=2,y=-0.8,xend=2,yend=1.8,colour="black",curvature=0,comment = "Gender -> MHU"),
+  tibble(x=1.85,y=-1,xend=1.15,yend=-1,colour="black",curvature=0,comment = "Gender -> Income"),
+  tibble(x=2,y=3.3,xend=2,yend=2.2,colour="black",curvature=0,comment = "Moved CD -> MHU"),
+  tibble(x=0.47,y=3.35,xend=0.1,yend=2.2,colour="black",curvature=0,comment = "Wealth -> CMA"),
+  tibble(x=0.53,y=3.35,xend=1.9,yend=2.15,colour="black",curvature=0,comment = "Wealth -> MHU"),
+  tibble(x=0.5,y=0.7,xend=0.5,yend=3.3,colour="black",curvature=0,comment = "Culture -> Wealth")
+  )
+
+model_theme <- list(
+  mountainmathHelpers::theme_mm(),
+    theme(panel.grid = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.text = element_blank()),
+    labs(x=NULL,y=NULL)
+)
+
+ggplot() +
+  geom_label(data=mv_vertices |> filter(!(Name %in% c("Wealth"))), aes(x=x,y=y,label=Name)) +
+  geom_label(data=mv_vertices |> filter(Name=="Wealth"),aes(x=x,y=y,label=Name),fill="grey") +
+  geom_segment(data=mv_edges %>% filter(curvature==0,comment %in% c("CMA -> Rent","Rent -> MHU","Income -> MHU",
+                                                                    "Couple -> Income","Couple -> MHU",
+                                                                    "Culture -> MHU",
+                                                                    "Culture -> Couple","Culture -> Income",
+                                                                    "Gender -> MHU","Gender -> Income",
+                                                                    "Moved CD -> MHU")),
+               aes(x=x,y=y,xend=xend,yend=yend,colour=colour),
+               linewidth=1,
+               arrow=arrow(length=unit(0.25,"cm"))) +
+  geom_curve(data=mv_edges %>% filter(curvature==0.3,comment %in% c("CMA -> Rent","Rent -> MHU","Income -> MHU")),
+               aes(x=x,y=y,xend=xend,yend=yend,colour=colour),
+               linewidth=1,
+               curvature=0.3,
+               arrow=arrow(length=unit(0.25,"cm"))) +
+  geom_curve(data=mv_edges %>% filter(curvature==0,comment %in% c("Wealth -> CMA","Wealth -> MHU","Culture -> Wealth")),
+               aes(x=x,y=y,xend=xend,yend=yend,colour=colour),
+               linewidth=0.5,
+             linetype="dashed",
+               curvature=0,
+               arrow=arrow(length=unit(0.45,"cm"))) +
+  geom_curve(data=mv_edges %>% filter(comment %in% c("Culture -> CMA")),
+               aes(x=x,y=y,xend=xend,yend=yend,colour=colour),
+               linewidth=0.5,
+             linetype="dashed",
+               curvature=-0.3,
+               arrow=arrow(length=unit(0.45,"cm"),ends = "both")) +
+  # geom_curve(data=tibble(a=1),x=1.05,y=1.8,xend=1.45,yend=0.7,linewidth=0.75,arrow=arrow(length=unit(0.4,"cm")),
+  #              linetype="dashed",curvature=0) + # Rent -< Couple
+  # geom_curve(data=tibble(a=1),x=1.15,y=-0.8,xend=1.55,yend=0.3,linewidth=0.75,arrow=arrow(length=unit(0.4,"cm")),
+  #              linetype="dashed",curvature=0.25) + # Income -> Couple
+  scale_colour_identity() +
+  expand_limits(x=c(-0.2,2.2),y=c(-1.2,3.5)) +
+  model_theme +
+  labs(title="MHU Model",
+       subtitle="")
+```
+
+Here we think of rent levels and income being the most important determinants of MHU status. Throughout we will work with real incomes and rents adjusted to 2021 dollars. Marital or common law status, here denoted as "Couple", also impacts MHU status with there being strong normative expectations that couples will form MHU households. This may be further strengthened by the presence of dependent children, which we don't model explicitly and is further complicated by being endogenous to housing pressures. Couple status can also impact income. We incorporate this relationship directly into our measure of income by using individual total income for individuals not coupled up and census family income for individuals in married or common law relationships. We explicitly interact couple status and income in our models to capture the complex interrelationship. We note that the income coefficient in this model lacks a clear causal interpretation due to the interaction with Couple status. It also absorbs some of the effects of Gender and Culture which might be desirable, but should be kept in mind when interpreting the results.
+
+There are likely other factors that impact MHU status that we do not model explicitly. Other factors include labour force status, which is partially captured by income, but adds additional information on current economic activity, where the income variable lags by a year. At the same time labour force status also interacts with Couple status in complex ways. In results not shown, adding labour fource status only slightly increases precision and does not change the main effect estimates, so we opted for not including it in our main model. Level of education could also impact MHU status. On the one hand it might signal later entry into the workforce depressing MHU likelihood. On the other hand it points to higher future earning potential and security, driving MHU likelihood up. We expect that including education level, or more broadly measures of permanent income, would mostly act by increasing precision but not confound the estimates of impacts of rent levels, and we examine exclusions by students status directly below.
+
+As we show in @fig-mhu-timeline-sex, gender impacts MHU status and is added to increase precision. There are noticeable differences in the share of the population in MHUs by gender, though these seem to hold relatively constant across metropolitan areas. Gender can also impact income through various channels.
+
+```{r fig-mhu-timeline-sex}
+#| fig-cap: "Share of the MHU population by gender, age group, and metro area"
+
+mhu_pumf_combined |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  summarize(WEIGHT=sum(WEIGHT),.by=c(Year,MHU,AGEGRP,CMA,SEX)) |>
+  mutate(Share=WEIGHT/sum(WEIGHT),.by=c(Year,AGEGRP,CMA,SEX)) |>
+  filter(MHU) |>
+  mutate(CMA=recode(CMA,"Ottawa – Gatineau"="Ottawa-Gat.")) |>
+  ggplot(aes(x=Year,y=Share,colour=SEX,group=SEX))+
+  geom_point(shape=21) +
+  geom_line() +
+  scale_color_brewer(palette ="Dark2") +
+  #scale_color_viridis_d()+
+  facet_grid(AGEGRP~CMA,scales="free_y")+
+  scale_y_continuous(labels=scales::percent) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        legend.position = "bottom")+
+  labs(title="Share of population in MHUs by gender",
+       x="Age group",
+       y="Share of population",
+       colour="Gender",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+```
+
+Being a recent mover into a housing market (here measured as Census District) also impacts MHU status insofar as it affects the degree one can rely upon existing networks to form various types of households, both MHU and non-MHU. For instance, migrants to a housing market may be unable to live within a parental household or have friends available to join as roommates, and if single, it may take them longer to partner. Moreover, migration is endogenous to housing pressures as well as labour market conditions, and conditioning on migration as proxied by moving to a different Census District may help separate out these effects.
+
+There are likely some other weaker relationships, with rents possibly driving people into common law or marriage status as they seek to economize on housing costs, and higher individual income plausibly increasing the likelihood of coupling up. Based upon past studies (e.g. @lauster2006room), we believe any impacts to be comparatively small and we don't model them explicitly here.
+
+While the above capture the main mechanisms we see for household and MHU formation, we reserve a major factor within our model for "culture." Here we take into account that Canada is a multicultural country. In addition to differing by rents and minimal household unit propensity, Canada's major metropolitan areas also differ dramatically in their attraction for various immigration streams. We do not pretend to fully model all of the ways this might matter, but we think of culture as potentially impacting MHU status in several ways. One is directly, by e.g. different cultures having different family and household formation rules. In particular, there may be higher preference or tolerance for young adults to live with their parents or for inter-generational households. But this effect is difficult to fully distinguish from differential experience of housing discrimination, potentially due to landlords' or (realtors') ascribed expectations about culture (e.g. @auspurg2019closed). Indirect pathways include culture impacting the process by which young adults couple up, differences in access to jobs impacting income levels, and immigrants sorting into CMAs depending on existing networks. We use rough proxies to get at these potential differences, mainly looking at the relatively consistent and large categories of "ethnicity" or "visible minority" and immigrant generation, but also testing for differences in Francophone vs English speaking Canadians. Restricting our sample to the 2011 through 2021 censuses we revisit this to refine our culture groupings for a more detailed look at the expense of a shortened timeline in @fig-mhu-refined-culture-model.
+
+Overall, the complexity of the "culture" variable makes it challenging to identify causal effects. We need to be especially careful not to attribute naive differences in MHU rates by culture solely to the direct pathway from culture to MHU status, or to interpret even this path solely as an indication of cultural preferences. In order to understand the mechanisms better we will also work with a simplified model that holds constant our measure of cultural variation by filtering on individuals who are non-indigenous, non-immigrant, non-visible minority Canadians.
+
+Having a look at our filters, we can see that it matters when we filter out student for those age 20-24, lifting the proportion within MHU. By comparison, we can also see how filtering for culture operates upon MHU status, demonstrating that the cultural composition of CMAs in Canada likely matters. In particular, the CMAs of Toronto and Vancouver, our two most expensive CMAs, also demonstrate the biggest shift in proportions of individuals within MHU when we filter out indigenous, immigrant, and visible minority Canadians. We compare the effects of filtering out students and additionally filtering out indigenous, visible minority and immigrant populations in @fig-mhu-timeline-cma-baseline-vs-school.
+
+```{r fig-mhu-timeline-cma-baseline-vs-school}
+#| fig-cap: "Share of the MHU population by select culture group, school attendance status, age group, and metro area"
+
+pd1 <- mhu_pumf_combined |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  add_income() |>
+  summarize(People=sum(WEIGHT),
+            Income=spatstat.univar::weighted.median(Income,WEIGHT),
+            .by=c(Year,MHU,AGEGRP,CMA)) |>
+  mutate(Share=People/sum(People),.by=c(Year,AGEGRP,CMA)) |>
+  filter(MHU)
+
+pd1.1 <- mhu_pumf_combined |>
+  filter_school() |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  add_income() |>
+  summarize(People=sum(WEIGHT),
+            Income=spatstat.univar::weighted.median(Income,WEIGHT),
+            .by=c(Year,MHU,AGEGRP,CMA)) |>
+  mutate(Share=People/sum(People),.by=c(Year,AGEGRP,CMA)) |>
+  filter(MHU)
+
+pd2 <- mhu_pumf_combined |>
+  filter_baseline() |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  add_income() |>
+  summarize(People=sum(WEIGHT),
+            Income=spatstat.univar::weighted.median(Income,WEIGHT),
+            .by=c(Year,MHU,AGEGRP,CMA)) |>
+  mutate(Share=People/sum(People),.by=c(Year,AGEGRP,CMA)) |>
+  filter(MHU)
+
+bind_rows(pd1 %>% mutate(Share_type="People in private households"),
+          pd1.1 %>% mutate(Share_type="Non-students"),
+          pd2 %>% mutate(Share_type="Non-student/visible minority/immigrant")) |>
+  mutate(CMA=recode(CMA,"Ottawa – Gatineau"="Ottawa-Gat.")) |>
+  ggplot(aes(x=Year,y=Share,colour=Share_type,group=Share_type))+
+  geom_point(shape=21) +
+  geom_line() +
+  scale_y_continuous(labels=scales::percent) +
+  facet_grid(AGEGRP~CMA,scales="free_y")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        legend.position = "bottom")+
+  labs(title="Comparison of effects on MHU estimates of filtering out students and\n visible minority and immigrant populations",
+       x=NULL,
+       y="Share of population",
+       colour="Base population",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+```
+
+As noted above, the effects of this filtering require caution to interpret. In particular, it is dangerous to naively ascribe differences in the share of the population in MHU across cultural groups to preference. In effect, while cultural differences can lead people to follow different family and household formation rules, being an immigrant, indigenous, or visible minority within Canada can also directly affect income and access to housing (e.g. through lack of recognition of credentials or discrimination). Understanding how much of the difference in propensity to form MHUs is due to cultural preferences, direct discrimination, or mediated through income effects requires a careful analysis. The different income patterns that appear through filtering, as shown in @fig-mhu-timeline-cma-income, highlight the complexity of interpreting results for culture.
+
+```{r fig-mhu-timeline-cma-income}
+#| fig-cap: "Median incomes by select culture group, school attendance status, age group, and metro area. Incomes are individual incomes for persons not in a couple relationship and census family incomes for people in a couple relationship."
+
+bind_rows(pd1 %>% mutate(Share_type="People in private households"),
+          pd1.1 %>% mutate(Share_type="Non-students"),
+          pd2 %>% mutate(Share_type="Non-student/visible minority/immigrant")) |>
+  left_join(cpi,by="Year") |>
+  mutate(CMA=recode(CMA,"Ottawa – Gatineau"="Ottawa-Gat.")) |>
+  ggplot(aes(x=Year,y=Income/CPI,colour=Share_type,group=Share_type))+
+  geom_point(shape=21) +
+  geom_line() +
+  scale_y_continuous(labels=scales::dollar) +
+  facet_grid(AGEGRP~CMA,scales="free_y")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        legend.position = "bottom")+
+  labs(title="Income of population in MHUs by age group",
+       x=NULL,
+       y="Median income (2021 dollars)",
+       colour="Base population",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+```
+
+Similarly, immigrants tend to sort into metro areas based on existing networks, which determines rent levels. And the "arrival cities" in which immigrants, especially visible minority immigrants, tend to sort into generally have higher rents as can be seen in @fig-mhu-vismin-rent.
+
+```{r fig-mhu-vismin-rent, fig.height=6.2}
+#| fig-cap: "Correlations of visible minority share of the population to median rent levels, also showing the growing share of visible minority populations over our study period, as well as the overall rise in real rents."
+
+pd3 <- mhu_pumf_combined |>
+  filter(CMA %in% focus_cmas) |>
+  filter(AGEGRP %in% main_ages) |>
+  summarize(People=sum(WEIGHT),
+            .by=c(Year,AGEGRP,CMA,VM)) |>
+  mutate(Share=People/sum(People),.by=c(Year,AGEGRP,CMA))
+
+pd3 |>
+  filter(VM=="Visible minority") |>
+  left_join(cma_rents,by=c("Year","CMA")) |>
+  ggplot(aes(x=Share,y=`Real rent`,colour=CMA))+
+  geom_point(shape=21) +
+  geom_smooth(method="lm",colour="black") +
+  scale_y_continuous(labels=scales::dollar) +
+  scale_x_continuous(labels=scales::percent) +
+  scale_color_manual(values=cma_colours) +
+  facet_grid(AGEGRP~Year)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5),
+        legend.position = "bottom")+
+  labs(title="Visible minority population and rent levels",
+       x="Share visible minority",
+       y="Median rent (2021 dollars)",
+       colour=NULL,
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+```
+
+This relationship becomes a challenge for identification of rent effects on MHU formation in models where culture is included because of this sorting as we will discuss later. But we can see that the strong negative relationship between rents and MHU prevalence holds when we filter out our cultural variation by restricting ourselves to the non-visible minority, non-immigrant population as seen in @fig-rent-MHU-baseline. The figure looks nearly the same as @fig-rent-MHU.
+
+```{r fig-rent-MHU-baseline}
+#| fig-cap: "Relationship between median rent and share of population in MHUs for the non-visible minority, non-immigrant, non-student baseline population."
+
+rent_mhu_data_baseline <- model_data_baseline |>
+  summarize(n=sum(WEIGHT),
+            across(c(Rent_q1,Rent,CPI,real_rent,real_income,real_rent_q1,cma_real_income),mean),
+            .by=c(Year,AGEGRP,MHU,CMA)) |>
+  mutate(Share=n/sum(n),.by=c(Year,AGEGRP,CMA)) |>
+  filter(MHU)
+
+rent_mhu_data_baseline |>
+  filter(AGEGRP %in% main_ages) |>
+  ggplot(aes(x=Rent/CPI,y=Share)) +
+  geom_point(shape=21,aes(colour=CMA)) +
+  geom_smooth(method="lm",formula=y~x,colour="black") +
+  scale_x_continuous(labels = \(x)scales::dollar(x,scale=10^-3,suffix="k",accuracy=0.1)) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_colour_manual(values=cma_colours) +
+  theme(legend.position = "bottom") +
+  facet_wrap(~AGEGRP,#scales="free_y",
+             nrow=1) +
+  labs(title="MHU shares vs median rent across metro areas and years",
+       subtitle="(people not attending school, non-visible minority, non-immigrant)",
+       x="Median real rent (2021 dollars)",
+       y="Share in MHU",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)")
+  
+```
+
+For this reason, we also run simple causal models using our filter for culture, which enables us to temporarily ignore its effects, as measured here. <!--In [Appendix -@sec-rent-MHU-appendix] we run these regressions sliced by year and by metro area for additional context. -->
+
+```{r fig-mhu-model-baseline, fig.height=5}
+#| fig-cap: "Simplified model of the determinants of MHU status for the baseline model focusing on non-visible minority, non-immigrant population not attending school part or full time. Wealth remains an unobserved confounder."
+
+ggplot() +
+  geom_label(data=mv_vertices |> filter(!(Name %in% c("Culture","Wealth"))), aes(x=x,y=y,label=Name)) +
+  geom_label(data=mv_vertices |> filter(Name=="Wealth"),aes(x=x,y=y,label=Name),fill="grey") +
+  geom_segment(data=mv_edges %>% filter(curvature==0,comment %in% c("CMA -> Rent","Rent -> MHU","Income -> MHU",
+                                                                    "Couple -> Income","Couple -> MHU",
+                                                                    "Gender -> MHU","Gender -> Income",
+                                                                    "Moved CD -> MHU")),
+               aes(x=x,y=y,xend=xend,yend=yend,colour=colour),
+               linewidth=1,
+               arrow=arrow(length=unit(0.25,"cm"))) +
+  geom_curve(data=mv_edges %>% filter(curvature==0.3,comment %in% c("CMA -> Rent","Rent -> MHU","Income -> MHU")),
+               aes(x=x,y=y,xend=xend,yend=yend,colour=colour),
+               linewidth=1,
+               curvature=0.3,
+               arrow=arrow(length=unit(0.25,"cm"))) +
+  geom_curve(data=mv_edges %>% filter(curvature==0,comment %in% c("Wealth -> CMA","Wealth -> MHU")),
+               aes(x=x,y=y,xend=xend,yend=yend,colour=colour),
+               linewidth=0.5,
+             linetype="dashed",
+               curvature=0,
+               arrow=arrow(length=unit(0.45,"cm"))) +
+  scale_colour_identity() +
+  expand_limits(x=c(-0.2,2.2),y=c(-1.2,3.5)) +
+  model_theme +
+  labs(title='MHU Model ignoring "Culture"',
+       subtitle="")
+```
+
+We will then return to the full model and test for differences in MHU rates by culture, and try to identify the controlled direct effect of culture on MHU status. For all of our analysis we will focus on a subset of Canadian metropolitan areas, with the selection being driven by data availability within the PUMF data.
+
+# Models
+
+To better understand the variation in MHU rates across CMAs and years we fit a series of linear models. To start we only work with our *baseline* population, i.e. non-students, non-visible minority non-immigrants. We also begin entirely at the metropolitan level.
+
+When modelling aggregate shares of MHUs we use linear OLS; when modelling MHU status of individual level data we use quasibinomial regression with logit link function weighted by survey weights. This is done using the `survey` R package [@R-survey]. Effect sizes are estimated using the `marginaleffects` package [@R-marginaleffects].
+
+We start by predicting MHU shares by CMA and year based on real median rents, as well as real median rents and real median incomes taken at the CMA level for each year, where incomes are based on each respective age group and include people in ownership households. The results are shown in @fig-rent-income-model-aggregate. Rents and incomes are measured in \$1000s of dollars per month to normalize the values fitted in the models. The models are estimated as ordinary least squares (OLS) models with gaussion errors. The models are estimated as:
+
+\begin{align*}
+\mathrm{Share\_MHU} &= \beta_0 + \beta_1 \mathrm{real\_rent} + \varepsilon\\
+\mathrm{Share\_MHU} &= \beta_0 + \beta_1 \mathrm{real\_rent} + \beta_2 \mathrm{real\_income} + \epsilon.
+\end{align*}
+
+```{r marginal-effect-helpers}
+fits_for_formula_by_age <- function(formula,data) {
+  main_ages |>
+    lapply(\(a){
+      lm(formula,data=data|>filter(AGEGRP==a))})|>
+    set_names(main_ages) 
+}
+
+fit.rent <- fits_for_formula_by_age(Share~real_rent,
+                                    data=rent_mhu_data_baseline) 
+fit.rent_income <- fits_for_formula_by_age(Share~real_rent+real_income,
+                                           data=rent_mhu_data_baseline) 
+fit.rent_q1 <- fits_for_formula_by_age(Share~real_rent_q1,
+                                       data=rent_mhu_data_baseline) 
+fit.rent_q1_income <- fits_for_formula_by_age(Share~real_rent_q1+real_income,
+                                              data=rent_mhu_data_baseline) 
+
+term_renames <- c(
+  "Culture2"="Culture",
+  "real_income"="Real income",
+  "real_rent"="Real rent",
+  "real_income (+1)"="Real income\n(+$10k/month)",
+  "real_rent (+1)"="Real rent\n(+$1k/month)",
+  "SEX"="Gender",
+  "SEXMale"="Male",
+  "AGEGRP"="Age group",
+  "CoupleSingle"="Single",
+  "real_income:CoupleSingle"="Real income\n(Single)",
+  "MOB5CDSame CD"="Same CD",
+  "MOB5CD"="Residence 5 years prior",
+  "(Intercept)"="(Intercept)",
+  "Couple"="Relationship status",
+  "CultureNot a visible minority_Immigrant"="Immigrant non-visible minority",
+  "CultureNot a visible minority_Non-Immigrant"="Non-immigrant non-visible minority",
+  "CultureVisible minority_Non-Immigrant"="Non-immigrant visible minority",
+  "CultureVisible minority_Immigrant"="Immigrant visible minority",
+  "CultureIndigenous"="Indigenous",
+  "Culture2Not a visible minority_Immigrant"="Immigrant non-visible minority",
+  "Culture2Not a visible minority_Non-Immigrant"="Non-immigrant non-visible minority",
+  "Culture2Visible minority_Non-Immigrant"="Non-immigrant visible minority",
+  "Culture2Visible minority_Immigrant"="Immigrant visible minority",
+  "Culture2Francophone"="Francophone Canadian",
+  "Culture2Indigenous"="Indigenous"
+)
+contrast_renames <- c(
+  "+1"="+$1k/month",
+  "mean(+1)"="+$1k/month",
+  "Not a visible minority_Immigrant - Not a visible minority_Non-Immigrant"="Non-vismin immigrant",
+  "Visible minority_Non-Immigrant - Not a visible minority_Non-Immigrant"="Vismin non-immigrant",
+  "Visible minority_Immigrant - Not a visible minority_Non-Immigrant"="Vismin immigrant",
+  "Francophone - Not a visible minority_Non-Immigrant"="Francophone Canadian",
+  "Indigenous - Not a visible minority_Non-Immigrant"="Indigenous"
+  )
+
+income_contrast_rename <- c(
+   "mean(+1)"="+$10k/month",
+   "mean(+0.1)"="+$1k/month",
+   "+1"="+$10k/month",
+   "+0.1"="+$1k/month"
+)
+
+rename_terms_add_y <- function(data) {
+  data |>
+    mutate(contrast=gsub("mean\\(|\\)","",contrast)) |>
+    mutate(contrast=case_when(grepl("income",term) ~ recode(contrast,!!!income_contrast_rename),
+                              TRUE ~ recode(contrast,!!!contrast_renames))) |>
+    mutate(term=recode(term,!!!term_renames)) |>
+    mutate(y=paste0(term,"\n(",contrast,")")) 
+}
+#term_renames_fct<-setNames(names(term_renames), term_renames)
+```
+
+```{r fig-rent-income-model-aggregate, fig.height=4}
+#| fig-cap: "Model estimating MHU shares at the aggregate metro area and year level by age group from rents and incomes."
+
+ate_rents <- bind_rows(
+  get_ate_from_models(fit.rent,variables=c("real_rent")) |> 
+    mutate(Type="Median Rent"),
+  get_ate_from_models(fit.rent_income,variables=list("real_rent"=1,"real_income"=0.1))  |> 
+    mutate(Type="Median Rent and Income")
+)
+
+ate_rents |> 
+  rename_terms_add_y() |>
+    ggplot(aes(y=y,x=estimate,colour=model)) +
+    geom_point(position = position_dodge(width = .9)) +
+    scale_color_manual(values=age_colours) +
+    geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                   position=position_dodge(width = .9)) +
+  facet_wrap(~Type) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  labs(title="Metro level (ecological) model for MHU Share on baseline population",
+  subtitle="(not attending school, not visible minority, non-immigrant)",
+       colour="Age group",
+       y=NULL,
+       x="Average effect size and 95% confidence interval on MHU share",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+```{r rent-income-ratios, cache=FALSE}
+ms_rent_summary <- ate_rents |> 
+  filter(Type=="Median Rent and Income") |>
+  #filter(model !="20 to 24 years") |>
+  summarize(estimate=mean(estimate),.by="term")
+
+ms_rent_income_ratios <- ate_rents |>
+  filter(Type=="Median Rent and Income") |>
+  filter(term %in% c("real_rent","real_income")) |>
+  select(`Age group`=model,name=term,value=estimate) |>
+  pivot_wider() |>
+  mutate(diff=real_rent+real_income)
+  
+```
+
+In line with expectations, higher rents decrease the proportion of people living in MHU. Moreover, the estimated effects remain remarkably steady when adding median real incomes to the model. This simple model suggests that, excluding the 20 to 24 year old age group, a \$1000 increase in real rent is associated with a `r scales::percent(-filter(ms_rent_summary,term=="real_rent")$estimate)` percent reduction in the share of people in MHU. The effect of aggregate median real income is less clear, with point estimates varying by age, but generally indicating a smaller effect, and confidence intervals often containing zero effect. The results suggests that decreasing monthly rents has a larger effect on the share of people in MHU than increasing monthly incomes by the same amount, as one would expect.
+
+To refine this metropolitan level model, we need to move to individual level data and use a logit model to predict individual level MHU status. This model draws upon our conceptualization of the causal pathways of MHU status in @fig-mhu-model-baseline. We continue to restrict our sample. Here we also explicitly model couple/single status and interact this with income. We also include an indicator of whether or not the person lived in the same census district 5 years prior. Finally, we include fixed effects for Census year.
+
+This model is estimated at the individual level using the PUMF data as quasibinomial logit regressions using the supplied survey weights.
+
+\begin{align*}
+\mathrm{MHU} &= \beta_0 + \beta_1 \mathrm{real\_rent} + \beta_2 \mathrm{real\_income} + 
+\beta_3\mathrm{couple} + \beta_4\mathrm{real\_income}\cdot\mathrm{couple}\\
+&+ \beta_5\mathrm{gender} + 
+\beta_6\mathrm{mob5cd}  + \beta_7\mathrm{Year} + \epsilon
+\end{align*}
+
+```{r roc-auc-metrics}
+# fits_baseline <- logit_fits_for_formula_by_age(
+#   MHU ~ real_income*Couple + real_rent + SEX + MOB5CD,
+#   data = model_data_baseline)
+fits_baseline_year_fe <- logit_fits_for_formula_by_age(
+  MHU ~ real_income*Couple + real_rent + SEX + MOB5CD + Year,
+  data = model_data_baseline)
+
+# fits_baseline_year_fe_log <- logit_fits_for_formula_by_age(
+#   MHU ~ log(real_income)*Couple + log(real_rent) + SEX + MOB5CD + Year,
+#   data = model_data_baseline)
+
+
+roc_for_models <- function(ms){
+  names(ms) |>
+    lapply(\(age){
+      pROC::roc(response=ms[[age]]$data$MHU, 
+                predictor=predict(ms[[age]]),
+                quiet=TRUE,
+                auc=TRUE)
+    }) |>
+    setNames(names(ms))
+}
+
+
+roc_baseline_year_fe <- roc_for_models(fits_baseline_year_fe)
+auc_baseline_year_fe <- roc_baseline_year_fe |> lapply(\(x) x$auc) |> unlist()
+
+plot_cap_rent_model_baseline_auc <- paste0("MHU model using baseline non-visible minority non-immigrant population not attending school part or full time, year fixed effects not shown. Model fit, as measured by AUC, varies by age group with values between ", round(min(auc_baseline_year_fe),2)," and ", round(max(auc_baseline_year_fe),2),".")
+# svyROC::wauc(response.var = md$MHU,phat.var = md$predicted,weights.var = md$WEIGHT) ## Can't handle lare data
+```
+
+```{r fig-rent-model-baseline, fig.height=5}
+#| fig-cap: !expr plot_cap_rent_model_baseline_auc
+
+# ate_baseline <-  get_ate_from_models(fits_baseline) |> mutate(Type="Baseline")
+ate_baseline_year_fe <-  simpleCache(
+  get_ate_from_models(
+    fits_baseline_year_fe,
+    variables=list("real_rent"=1,"real_income"=0.1,"MOB5CD"="reference",
+                   "SEX"="reference","Couple"="reference","Year"="reference")),
+  "fits_baseline_year_fe.rds",
+  path=here::here("data_cache"),
+  refresh=refresh_ate) |>
+  mutate(Type="Baseline with year fixed effects")
+
+ate_baseline_year_fe |> 
+  filter(term!="Year") |> 
+  rename_terms_add_y() |>  
+    ggplot(aes(y=y,x=estimate,colour=model)) +
+    geom_point(position = position_dodge(width = .9)) +
+    scale_color_manual(values=age_colours) +
+    geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                   position=position_dodge(width = .9)) +
+  #facet_wrap(~Type) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  labs(title="Baseline MHU model (Year fixed effects not shown)",
+  subtitle="(not attending school, not visible minority, non-immigrant)",
+       colour="Age group",
+       y=NULL,
+       x="Average effect size and 95% confidence intervals on MHU probability",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+Real rents measured as metropolitan medians remain a strong predictor of MHU status, with higher rents significantly lowering the probability of being in an MHU household. Remembering that marginal effect of increasing real incomes lack a clear causal interpretation, the results do suggest that increasing incomes significantly boost the probability of being in an MHU household. Once again, an extra thousand dollars rent has a significantly stronger effect than an extra thousand dollars in monthly income. These estimates largely replicate our ecological CMA level model at the individual level.
+
+Other variables from the model are also significant predictors of MHU status. Being single reduces the probability of being in an MHU relative to being part of a couple, but the positive income effect is stronger for singles (interaction not shown). Being a man slightly reduces the probability of being in an MHU. Being a long-time resident of the Census Division also reduces the probability of being in an MHU for younger age groups, which we interpret as consistent with the local network effects (e.g. having parents to live with or knowing other people to rely upon as roommates). For older ages this effect disappears.
+
+# Role of "culture"
+
+Now we return to our full sample. We continue to leave out those attending school, both because our measurements for the MHU status of this group remain weak, and their conceptual status remains ambiguous (we can consider them as potential dependents fitting comfortably within the MHU parent-child relationship).
+
+We now extend our baseline model by including a measure of "culture" as a predictor of MHU status, dividing the population into five broad groups:
+
+-   Non-visible minority, non-immigrant population
+-   Population with indigenous identity
+-   Non-visible minority, immigrant population
+-   Visible minority, non-immigrant population
+-   Visible minority, immigrant population
+
+and adding the *culture* dummies into the baseline model.
+
+\begin{align*}
+\mathrm{MHU} &= \beta_0 + \beta_1 \mathrm{real\_rent} + \beta_2 \mathrm{real\_income} + 
+\beta_3\mathrm{couple} + \beta_4\mathrm{real\_income}\cdot\mathrm{couple}\\
+&+ \beta_5\mathrm{gender} + 
+\beta_6\mathrm{mob5cd} + \beta_7\mathrm{Year} + \beta_8\mathrm{culture} + \epsilon
+\end{align*}
+
+```{r mhu-culture-model}
+fits_full_culture_nf <- logit_fits_for_formula_by_age(
+  MHU ~ real_income*Couple + real_rent + SEX + MOB5CD + Culture + Year,
+  data = model_data_culture |> filter_school())
+
+roc_full_culture_nf <- roc_for_models(fits_full_culture_nf)
+auc_full_culture_nf <- roc_full_culture_nf |> lapply(\(x) x$auc) |> unlist()
+
+plot_cap_model_mhu_culture_nf_auc <- paste0("MHU model including \"Culture\" using the full population except people attending school part or full time, year fixed effects not shown. AUC varies by age group with values between ", round(min(auc_full_culture_nf),2)," and ", round(max(auc_full_culture_nf),2),".")
+```
+
+```{r fig-model-mhu-culture-nf}
+#| fig-cap: !expr plot_cap_model_mhu_culture_nf_auc
+
+ate_culture_nf <-  simpleCache(
+  get_ate_from_models(
+    fits_full_culture_nf,
+    variables=list("real_rent"=1,"real_income"=0.1,"MOB5CD"="reference",
+                   "SEX"="reference","Couple"="reference","Culture"="reference",
+                   "Year"="reference")),
+  "ate_culture_nf.rds",
+  path = here::here("data_cache"),
+  refresh=refresh_ate)
+
+ate_culture_nf |> 
+  filter(term!="Year") |>
+  rename_terms_add_y() |>
+  ggplot(aes(y=y,x=estimate,colour=model)) +
+  geom_point(position = position_dodge(width = .9)) +
+  scale_color_manual(values=age_colours) +
+  geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                 position=position_dodge(width = .9)) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  labs(title="MHU model with culture",
+  subtitle="(people not attending school)",
+       colour="Age group",
+       y=NULL,
+       x="Average effect size and 95% confidence intervals on MHU probability",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+The estimates of effects from the full model are shown in @fig-model-mhu-culture-nf and are similar to those from the constrained (filtered) model with generally a small compression in the range of effect sizes for each term across age groups.
+
+The effects from these two models are averaged over different populations; the baseline model just uses the baseline non-visible minority non-immigrant population. We can complement this by estimating the culture model just over this baseline population enabling us to compare the effect sizes, as in @fig-model-culture-baseline-comparison.
+
+```{r mhu-culture-on-baseline}
+ate_culture_nf_baseline <-  simpleCache(
+  get_ate_from_models(
+    fits_full_culture_nf,
+    variables=list("real_rent"=1,"real_income"=0.1,"MOB5CD"="reference",
+                   "SEX"="reference","Couple"="reference",
+                   "Year"="reference"),
+    newdata = model_data_culture |> 
+      filter_school() |>
+      filter(Culture=="Not a visible minority_Non-Immigrant")),
+  "fits_full_culture_nf_baseline_nc.rds",
+  path=here::here("data_cache"),
+  refresh=refresh_ate)
+```
+
+```{r fig-model-culture-baseline-comparison}
+#| fig-cap: "Comparison of estimated effects for the baseline model, the culture model, and a culture model for baseline population only to highlight variation in estimates."
+bind_rows(ate_culture_nf |> mutate(Type="Culture model"),
+          ate_culture_nf_baseline |> mutate(Type="Culture model on baseline population"),
+          ate_baseline_year_fe |> mutate(Type="Baseline model")) |> 
+  filter(term!="Year",term!="Culture") |>
+  rename_terms_add_y() |>
+  ggplot(aes(y=model,x=estimate,colour=Type)) +
+  geom_point(position = position_dodge(width = .9)) +
+  scale_color_manual(values=sanzo::trios$c157) +
+  geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                 position=position_dodge(width = .9)) +
+  scale_x_continuous(labels=scales::percent) +
+  theme(legend.position = "bottom") +
+  facet_wrap(~y,scales="free_x") +
+  labs(title="MHU model effect size comparison",
+  subtitle="(people not attending school)",
+       colour="Effect estimate",
+       y=NULL,
+       x="Average effect size and 95% confidence intervals on MHU probability",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+This comparison shows that culture is a factor that influences the *rent* and *income* variables. When estimating the effect size on the baseline population we see clear patterns, with the absolute value of the effect size of all variables declining with age. The largest movement in model effects is that for 20 to 24 year olds on rent, where the model that includes culture shows much higher rent effects on the baseline population compared to evaluating these effects on the full population or using the baseline model that does not consider effects of culture.
+
+The slight shift in effect size between the baseline model and the culture model estimated on the baseline population hints at lurking unobserved factors. We have identified wealth as one such factor, and lower effect size of rent increases in the baseline model are consistent with systematic differences in wealth between the baseline population and the full population, with on average higher levels of wealth in the the baseline population reducing sensitivity to housing costs. Lower effect size is consistent with wealth-based sorting, and potentially also speaks to the continuing relevance of inheritance. [@feathered_nest.1992]
+
+In <!--[Appendix -@sec-alt-model-specs] and --> [Appendix -@sec-separate-models-by-culture] we run several alternative model specifications to test the robustness of our results, and in [Appendix -@sec-francophones] we run an alternative model specification that separates out Francophones from English speakers in the "culture" variable and discuss advantages and disadvantages to this approach there. In [Appendix -@sec-refined-culture] we break down the "culture" variable into finer groupings to understand the considerable heterogeneity within the "culture" variable, but because of data availability we have to restrict ourselves to the 2011 through 2021 censuses.
+
+We have suppressed year fixed effects in the output of the models above to focus on the main effects. But it is useful to draw these effects out in order to understand how our model operates within the context of historical change. We complement our previous two models with one that only includes year fixed effects to capture change over time.
+
+\begin{align*}
+\mathrm{MHU} &= \beta_0 + \beta_1\mathrm{Year} + \epsilon
+\end{align*}
+
+```{r year-model-effect-auc}
+
+only_year_models <- logit_fits_for_formula_by_age(
+  formula = MHU ~ Year,
+  data = model_data_culture |> filter_school()
+)
+
+
+roc_only_year <- roc_for_models(only_year_models)
+auc_only_year <- roc_only_year |> lapply(\(x) x$auc) |> unlist()
+
+plot_cap_mhu_year_fe_auc <- paste0("Comparison of year fixed effects for the baseline model, the culture model, and a model that only uses year fixed effects to highlight how the prevalence of MHU status has shifted over time. AUC for Year Only model is significantly lower than for the others and varies by age group with values between ", round(min(auc_only_year),2)," and ", round(max(auc_only_year),2),".")
+```
+
+```{r fig-mhu-year-fe-comparison, fig.height=5.5}
+#| fig-cap: !expr plot_cap_mhu_year_fe_auc
+
+ate_only_years <-  simpleCache(get_ate_from_models(only_year_models),
+                               "ate_only_years.rds",
+                               path=here::here("data_cache"),
+                               refresh=refresh_ate)
+
+all_contrasts <- ate_only_years$contrast |> unique() |> gsub("mean\\(|\\)","",x=_) |> sort()
+contrast_colours <- setNames(year_colours[substr(all_contrasts,1,4)], all_contrasts)
+
+
+bind_rows(
+  ate_only_years |> mutate(Type="Year only"),
+  ate_culture_nf |> mutate(Type="Culture"),
+  #ate_culture_nf_baseline |> mutate(Type="Culture on baseline pop"),
+  ate_baseline_year_fe |> mutate(Type="Baseline")
+) |>
+  mutate(Type=factor(Type,levels=c("Year only","Baseline","Culture","Culture on baseline pop"))) |>
+  filter(term=="Year") |>
+  rename_terms_add_y() |>
+  ggplot(aes(y=model,x=estimate,colour=contrast)) +
+  geom_point(position = position_dodge(width = .9)) +
+  #scale_color_manual(values=age_colours) +
+  geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                 position=position_dodge(width = .9)) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  scale_colour_manual(values=contrast_colours) +
+  #coord_cartesian(xlim=c(-0.1,0.4)) +
+  facet_wrap(~Type,nrow=1) +
+  #theme(legend.position="bottom") +
+  labs(title="Year fixed effects comparison across models and populations",
+       colour="Year",
+       y=NULL,
+       x="Average effect size and 95% confidence interval on MHU probability",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+We can see the dramatic decrease in the proportions of households corresponding to MHU over time, much as shown descriptively in @fig-mhu-timeline-cma. The historical change has been most pronounced for younger groups. Strikingly, when we run our baseline models, the coefficients for years both reduce in effect size and flip in sign. After accounting for rents, incomes, gender, couple status, and recent moving, there is no historical trend away from MHU. Instead, if anything, there's a trend toward MHU for older ages. Further adding culture into our model reveals the same general shift toward MHU over time, rather than away from it. If there's a secular trend over time, it appears to be in the direction of the increasing normative power of MHU, at the same time that factors like rents make it increasingly difficult to afford. Overall, results in @fig-mhu-year-fe-comparison provide strong evidence that our models explain much of the change in MHU status over time.
+
+# Discussion
+
+We find broad support for a strong relationship between rents and the the likelihood that households will form into minimal household units, prioritizing either living alone, living only with a partner and/or living only with a dependent child. Across 1981-2021, this relationship applies at the metropolitan level for our nine large cities of interest, as well as at the individual level for residents of those cities. Across all age groups studied here, households comprised of those living alone, living as a member of a couple and/or living with a dependent child rise as a proportion of the population as rents become cheaper, and decline as rents become more expensive. Moreover, this relationship is robust across various specifications, including the inclusion of culture. Compared to a baseline model of cultural change, as measured through coefficients for the nine Census years in our sample, a simple model including rent effectively explains the broad historical shift across age groups away from Minimal Household Units.
+
+The analysis refreshes the insight that households are malleable [@harris1994flexible], and that households are partially outcomes of housing pressures. As such, existing household arrangements should not be taken as the simple product of preferences of household members and assuming households to remain fixed under policy interventions can introduce substantial collider bias threatening the validity of analysis. Greater access to housing in Canada will almost certainly result in both more people living within MHU and more households overall than we currently see within Census data - especially outside of Québec. This serves as a reminder that housing policy should pay special attention to impacts on household formation, and many household-based measures frequently used to assess housing pressure, like shelter cost to household income ratios, fail to incorporate how the composition of households itself reflects housing pressure. Moreover, the process of households splitting up generally decreases aggregate household-based affordability measures despite being viewed as preferable by household members, indicating that household formation should be directly incorporated into policy analysis to complement affordability-based metrics in order to avoid misspecification of the welfare function.
+
+Broadly speaking, our analysis rejects the idea that family and household change is best considered as the product of post-material cultural change (e.g. @lesthaeghe2010unfolding). Rather, cultural change has likely produced new sets of rules that bind families and households to a material substrate; in this case housing. The strong relationship between rents and minimal household units is predicted by the rise of culturally normative rules supporting MHU as ideal. As codified within municipal bylaw and planning practice, those same normative rules likely contribute to variations in housing shortage measurable by our rent data.
+
+The rise of new cultural rules must be considered against the rise of Canada as an increasingly multicultural country. This may influence the degree to which culturally normative rules should be considered broadly applicable. One interpretation of adding "culture" to our models is that tolerance for non-MHU households may differ across different cultural groupings. But this is not the only interpretation. For instance, it may also be that discrimination faced within the housing market differs by different cultural groupings. Similarly, cultural groupings have different incomes, different coupling patterns, and cluster differently across metropolitan regions. All of these factors challenge any simple assessment of the role of culture in explaining housing difference. But our models suggest that the effect of rent is relatively robust to the rise of multiculturalism within Canada's largest cities.
+
+Overall the effects of rent and income on MHU status are marginal effects and it is important to point out that neither are directly viable intervention points for housing policy to improve MHU outcomes. This is perhaps most obvious when it comes to rents, which in our analysis operate as a measure of housing shortage. If we were instead to treat rents as a direct point of intervention, for instance lowering rents through price controls but leaving all else unchanged, we would not expect to see a meaningful increase in MHU shares. To increase MHU shares it is necessary to address the underlying housing shortage, increasing the total amount of housing available, as illustrated in the correlations in @fig-rent-MHU and @fig-rent-MHU-baseline, but more fundamentally it is a consequence of the pigeonhole principle and the mechanical relationship between dwellings and household. At the same time this insight offers an explanation for why rents are high in many metro areas across Canada; the rent levels are the expression of the marginal demand to form MHU households. Building more housing allows people in non-MHU situations to form MHU households, illustrating the slide down along the demand curve for housing. In other words, more housing would enable Canadians to form more of the households they increasingly want to form.
+
+# Limitations and Future Extensions
+
+Data limitations inherent in Census PUMF make it difficult to extend our measurement of Minimal Household Units backward from 1981. Similarly, we are unable apply more refined categories to our "culture" variable, or to extend variation in our measures of culture backward very far in time. These issues limit our ability to more carefully examine historical change and demarcate when and how the present rules for household formation became established. Future extensions of this work could include research using non-public (protected) Census files. This might also allow an expansion of metropolitan coverage.
+
+We treat high real rent as mostly a product of housing shortage (i.e. failure to meet demand), but high real rents can also be the result of meeting local demand for higher quality housing, especially in places with higher incomes. It remains difficult to fully separate out this effect, especially since regulations can also forbid lower quality housing, producing shortages that can drive out those with lower incomes. Our long timelines likely illustrate this effect, especially through the dramatic across-the-board climb in real rents between 1951 and 1971. This period also witnessed a climb in the underlying quality of housing, as measured by plumbing fixtures, appliances, indoor heating and cooling, and roominess. We do not fully address housing quality shifts in our analysis here. To better get at complexities in future analyses, we would like to more closely examine the interactions between regulations, development, and rents across different structure types and mixes of amenities. Future work could also explore sales price variation, which we expect to be correlated to rents, but also follow different determinants, including interest rate and mortgage policy variation.
+
+Our focus on Canada could readily be extended to comparative study of other countries. In particular, we would expect much of the variation we observe in Canada to apply to other countries, especially those similarly dominated by private housing stock while drawing upon Anglophone planning and regulatory frameworks (e.g. the USA, Australia, and New Zealand). We expect the new rules we observe in Canada to produce similar relationships between housing shortages and family and household formation within these settings. We look forward to continuing this work.
+
+# References
+
+::: {#refs}
+:::
+
+\newpage
+\appendix
+
+# Appendix {.unnumbered}
+
+# Rent quantiles and bedroom controls {#sec-rent-quantiles-bedrooms}
+
+@fig-rent-timeline investigates if median rents also provide good information about the lower end of the market.
+
+```{r fig-rent-timeline, fig.height=4.5}
+#| fig-cap: "Real median and 25th percentile rents estimated at the CMA level from PUMF data 1981-2021 for households that moved in the preceeding year (preceeding 5 years for 1981 and 1986)."
+
+cma_rents |>
+  filter(CMA %in% focus_cmas) |>
+  # filter(CMA %in% c("Edmonton","Montréal","Ottawa – Gatineau",
+  #                   "Québec","Hamilton")) |>
+  rename("Real median rent"="Real rent") |>
+  pivot_longer(matches("Real"),names_to="Rent type",values_to="Real rent") |>
+  mutate(`Rent type`=factor(`Rent type`,levels=c("Real Q1 rent","Real median rent"))) |>
+  ggplot(aes(x=Year,y=`Real rent`,colour=CMA,group=CMA)) +
+  geom_point(shape=21) +
+  geom_line() +
+  scale_color_manual(values=cma_colours) +
+  facet_wrap(~`Rent type`) +
+  scale_y_continuous(labels = scales::dollar,#trans="log",
+                     breaks=seq(100,3000,100)) +
+  labs(title="Median and first quartile rent for movers in the last 1 year (last 5 years for 1981 and 1986)",
+       y="Real rent (2021 dollars)",
+       x=NULL,
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+The overall movement in the 25th percentile of rents largely mirrors median rents. Similarly, @fig-rent-timeline-2brm demonstrates that restricting the sample to 2 bedroom units, which is only available back to 2011 in PUMF data, does not greatly change the overall pattern of rent variation over time. Overall, we are relatively confident in the historical and geographic comparability of our measure of median gross rents from 1981-2021.
+
+```{r fig-rent-timeline-2brm, fig.height=4}
+#| fig-cap: "Real median and 25th percentile rents estimated at the CMA level from PUMF data 2011-2021 for 2 bedroom units for households that moved in the preceeding year."
+
+rents_1_2brm |>
+  filter(CMA %in% focus_cmas) |>
+  left_join(cpi,by="Year") |>
+  mutate(`Real rent`=Rent/CPI) |>
+  rename("Real median 2 bedroom rent"="Real rent") |>
+  inner_join(cma_rents |>
+               select(CMA,Year,`Real median overall rent`=`Real rent`),
+             by=c("CMA","Year")) |>
+  pivot_longer(matches("Real median"),names_to="Rent type",values_to="Real rent") |>
+  mutate(`Rent type`=factor(`Rent type`,levels=c("Real median overall rent","Real median 2 bedroom rent"))) |>
+  ggplot(aes(x=Year,y=`Real rent`,colour=CMA,group=CMA)) +
+  geom_point(shape=21) +
+  geom_line() +
+  scale_color_manual(values=cma_colours) +
+  facet_wrap(~`Rent type`) +
+  scale_y_continuous(labels = scales::dollar,#trans="log",
+                     breaks=seq(100,3000,100)) +
+  labs(title="Median rent for movers in the last 1 year",
+       y="Real rent (2021 dollars)",
+       x=NULL,
+       caption="StatCan Census PUMF 2011 through 2021 (individuals)") 
+```
+
+
+# Separate models by "culture" {#sec-separate-models-by-culture}
+
+In this section we test a model specification that runs separate models for each culture and age group. Results are shown in @fig-model_culture_separate grouped by culture and in @fig-model_culture_separate_age grouped by age.
+
+\begin{align*}
+\mathrm{MHU} &= \beta_0 + \beta_1 \mathrm{real\_rent} + \beta_2 \mathrm{real\_income} + 
+\beta_3\mathrm{couple} + \beta_4\mathrm{real\_income}\cdot\mathrm{couple}\\
+&+ \beta_5\mathrm{gender} + 
+\beta_6\mathrm{mob5cd} + \beta_7\mathrm{Year} + \epsilon
+\end{align*}
+
+```{r fig-model_culture_separate}
+#| fig-cap: "Alternate model specification running separate models for each Culture and age group, grouped by Culture"
+
+fits_by_culture_age <- levels(model_data_culture$Culture) |> 
+  lapply(\(c)
+         logit_fits_for_formula_by_age(MHU ~ real_income*Couple + real_rent + SEX + MOB5CD +Year,
+                                       data = model_data_culture |>
+                                         filter(Culture==c) |>
+                                         filter_school())
+  ) |>
+  set_names(levels(model_data_culture$Culture)) |>
+  unlist(recursive=FALSE)
+
+term_renames2 <- set_names(as.character(term_renames),
+                           names(term_renames) |> gsub("Culture","",x=_))
+
+ate_culture_age <-  simpleCache(
+  get_ate_from_models(
+    fits_by_culture_age,
+        variables=list("real_rent"=1,"real_income"=0.1,"MOB5CD"="reference",
+                   "SEX"="reference","Couple"="reference",
+                   "Year"="reference")),
+  "fits_by_culture_age.rds",
+  path=here::here("data_cache"),
+  refresh=refresh_ate) |>
+  mutate(AGEGRP=strsplit(model,"\\.") |> lapply(last) |> unlist(),
+         Culture=strsplit(model,"\\.") |> lapply(first) |> unlist()) |>
+  mutate(Culture=recode(Culture,!!!term_renames2)) 
+
+
+ate_culture_age |> 
+  filter(term!="Year") |>
+  rename_terms_add_y() |>
+  mutate(conf.low=coalesce(conf.low,-Inf)) |>
+  mutate(conf.high=coalesce(conf.high,Inf)) |>
+  ggplot(aes(y=y,x=estimate,colour=AGEGRP)) +
+  geom_point(position = position_dodge(width = .9)) +
+  scale_color_manual(values=age_colours) +
+  geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                   position=position_dodge(width = .9)) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  facet_wrap(~Culture) +
+  theme(legend.position = c(1, 0),
+        legend.justification = c(1, 0.15)) +
+  labs(title="MHU model by broad culture group",
+  subtitle="(people not attending school)",
+       colour="Age group",
+       y=NULL,
+       x="Average effect size and 95% confidence interval on MHU probability",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+```{r fig-model_culture_separate_age}
+#| fig-cap: "Alternate model specification running separate models for each culture and age group, grouped by age group"
+
+ate_culture_age |> 
+  filter(term!="Year") |>
+  rename_terms_add_y() |>
+  mutate(conf.low=coalesce(conf.low,-Inf)) |>
+  mutate(conf.high=coalesce(conf.high,Inf)) |>
+  ggplot(aes(y=y,x=estimate,colour=Culture)) +
+  geom_point(position = position_dodge(width = .9)) +
+  geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                 position=position_dodge(width = .9)) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  facet_wrap(~AGEGRP,nrow=1) +
+  #coord_fixed(xlim=c(-0.7,0.4)) +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(nrow=2)) +
+  labs(title="MHU model by broad culture group",
+  subtitle="(people not attending school)",
+       colour=NULL,
+       y=NULL,
+       x="Average effect size and 95% confidence interval on MHU probability",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+# Francophones {#sec-francophones}
+
+It is conceivable that Francophone Canadians have different housing and family formation preferences from non-francophone non-visible minority Canadians. This is challenging to test empirically because language can also generate friction to move across provinces and enclaves, rendering the French speaking population within French-dominated regions different from the French speaking population living elsewhere in ways that affect their housing and living arrangements, for example through differences in wealth or education or other unmeasured aspects. These differences can also appear within CMAs, most prominently in Ottawa, where rents have been consistently significantly lower on the Quebec side compared to the Ontario side. We cannot control for location within metro areas, and breaking out Francophones would likely pick up on this unmeasured difference and assign some of the rent effect to language.
+
+Nonetheless, it is worthwhile to explore the effects of splitting our reference culture group of non-visible minority non-immigrant Canadians into French speakers (using the mother tongue variable) and others, results are shown in @fig-model-mhu-culture.
+
+```{r fig-model-mhu-culture}
+#| fig-cap: "MHU model separating out Francophones from English speakers in \"Culture\" using the full population except people attending school part or full time, year fixed effects not shown."
+
+# ate_culture <-  get_ate_from_models(fits_full_culture) |> 
+#   mutate(Type="Culture")
+fits_full_culture_year_fe <- logit_fits_for_formula_by_age(
+  formula = MHU ~ real_income*Couple + real_rent + SEX + MOB5CD + Culture2+Year,
+  data = model_data_culture |> filter_school())
+
+
+ate_culture_year_fe <- simpleCache(
+  get_ate_from_models(
+    fits_full_culture_year_fe,
+    variables=list("real_rent"=1,"real_income"=0.1,"MOB5CD"="reference",
+                   "SEX"="reference","Couple"="reference","Culture2"="reference",
+                   "Year"="reference")),
+  "fits_full_culture_year_fe.rds",
+  path=here::here("data_cache"),
+  refresh=refresh_ate)|> 
+  mutate(Type="Culture with year fixed effects")
+
+
+ate_culture_year_fe |> 
+  filter(term!="Year") |> 
+  rename_terms_add_y() |>
+  ggplot(aes(y=y,x=estimate,colour=model)) +
+  geom_point(position = position_dodge(width = .9)) +
+  scale_color_manual(values=age_colours) +
+  geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                 position=position_dodge(width = .9)) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  facet_wrap(~Type) +
+  labs(title="MHU model including Francophones as separate culture group (Year fixed effects not shown)",
+  subtitle="(people not attending school)",
+       colour="Age group",
+       y=NULL,
+       x="Average effect size and 95% confidence interval on MHU probability",
+       caption="StatCan Census PUMF 1981 through 2021 (individuals)") 
+```
+
+Here we see that breaking out Francophones from the reference group does indeed lower the estimated effect of rent and being Francophone shows a clear positive effect on MHU probability in this model specification. This is in principle compatible with the notion that Francophones have different housing and living arrangement preferences. We are unable to differentiate if this is in fact causal or picking up unmeasured patterns of how rents and Francophones distribute both across and within CMAs. Close analysis would require finer geographic data unavailable within the PUMF. While there may well be a mixture of both interpretations at play, we believe that our main model specification that treats Francophones as similar to other non-visible minority Canadian born individuals is the most appropriate choice given the data available and the general history of treating Northwest European origin patterns and transitions as similar.
+
+
+# Refined "Culture" {#sec-refined-culture}
+
+Our classification of "culture" in our main model is to a large extent driven by data availability in earlier censuses. Moreover, the visible minority population in Canada was quite limited in earlier years in our timeline. In this section we restrict ourselves to the 2011, 2016, and 2021 censuses and refine the concept of "culture" in several ways. We still rely on the visible minority classification to provide proxies for cultural groups, but break out larger visible minority sub-groups, in particular Chinese, South Asian, Filipino and Black visible minority groups. We also distinguish between 1st, 2nd, and 3rd or more generation immigrants, grouping second generation with one parent born overseas and one parent born in Canada together with 3rd generation or more based on observed MHU patterns in the data. Moreover, we collapse all third generation or more visible minority groups into one category as the sample sizes for some subgroups are quite small and the patterns are similar.
+
+```{r culture-model-renames}
+culture2_levels3 <- c(
+  "3G_Not a visible minority"="3rd gen non-visible minority",
+  "Francophone"="Francophone",
+  "Indigenous"="Indigenous",
+  "3G_Visible minority"="3rd gen visible minority",
+  "2G_Not a visible minority"="2nd gen non-visible minority",
+  "2G_South Asian"="2nd gen South Asian",
+  "2G_Filipino"="2nd gen Filipino",
+  "2G_Chinese"="2nd gen Chinese",
+  "2G_Black"="2nd gen Black",
+  "2G_Other visible minority"="2nd gen other visible minority",
+  "1G_Not a visible minority"="1st gen non-visible minority",
+  "1G_South Asian"="1st gen South Asian",
+  "1G_Filipino"="1st gen Filipino",
+  "1G_Chinese"="1st gen Chinese",
+  "1G_Black"="1st gen Black",
+  "1G_Other visible minority"="1st gen other visible minority"
+)
+
+model_data_culture_refined <- model_data_culture |> 
+  filter(Year %in% c("2011","2016","2021")) |>
+  mutate(VM3=case_when(VM2 %in% c("Indigenous") ~ VM2,
+                       VISMIN %in% c("Not a visible minority","South Asian","Chinese","Filipino","Black") ~ VISMIN,
+                       TRUE ~ "Other visible minority")) |>
+  mutate(GEN2=gsub("2GA","2G",GEN)) |>
+  mutate(GEN2=gsub("2GB","3G",GEN2)) |>
+  mutate(Culture=case_when(
+    VM3 %in% c("Indigenous") ~ VM3,
+    GEN2=="3G" & VM3!="Not a visible minority" ~ paste0(GEN2,"_","Visible minority"),
+    TRUE ~ paste0(GEN2,"_",VM3))) |>
+  mutate(Culture=factor(Culture,levels=names(culture2_levels3)))
+```
+
+\begin{align*}
+\mathrm{MHU} &= \beta_0 + \beta_1 \mathrm{real\_rent} + \beta_2 \mathrm{real\_income} + 
+\beta_3\mathrm{couple} + \beta_4\mathrm{real\_income}\cdot\mathrm{couple}\\
+& + \beta_5\mathrm{gender} + \beta_6\mathrm{mob5cd} + \beta_7\mathrm{Year} +
+\beta_8\mathrm{culture\_refined} + \epsilon
+\end{align*}
+
+```{r culture-age-refind-effects}
+fits_culture_age_refined <- logit_fits_for_formula_by_age(
+  formula=MHU ~ real_income*Couple + real_rent + SEX + MOB5CD + Culture + Year,
+  data = model_data_culture_refined |> filter_school())
+
+roc_culture_age_refined <- roc_for_models(fits_culture_age_refined)
+auc_culture_age_refined <- roc_culture_age_refined |> lapply(\(x) x$auc) |> unlist()
+
+# fits_culture_age_base <- logit_fits_for_formula_by_age(
+#   formula=MHU ~ real_income*Couple + real_rent + SEX + MOB5CD + Culture + Year,
+#   data = model_data_culture |>  filter(Year %in% c("2011","2016","2021")) |> filter_school())
+# roc_culture_age_base <- roc_for_models(fits_culture_age_base)
+# auc_culture_age_base <- roc_culture_age_base |> lapply(\(x) x$auc) |> unlist()
+
+plot_cap_mhu_refined_culture_auc <- paste0("Alternate model specification with refined culture grouping and age group, year fixed effects not shown. AUC varies by age group with values between ", round(min(auc_culture_age_refined),2)," and ", round(max(auc_culture_age_refined),2),".")
+```
+
+```{r fig-mhu-refined-culture-model, fig.height=6.5}
+#| fig-cap: !expr plot_cap_mhu_refined_culture_auc
+
+ate_culture_age_refined <-  simpleCache(
+  get_ate_from_models(
+    fits_culture_age_refined,
+    variables=list("real_rent"=1,"real_income"=0.1,"MOB5CD"="reference",
+                   "SEX"="reference","Couple"="reference","Culture"="reference",
+                   "Year"="reference")),
+  "ate_culture_age_refined.rds",
+  path=here::here("data_cache"),
+  refresh=refresh_ate)
+
+ate_culture_age_refined |> 
+  filter(term !="Year") |>
+  mutate(contrast=gsub("mean\\(|\\)","",contrast)) |>
+  mutate(contrast=case_when(term=="Culture" ~ as.character(culture2_levels3[gsub(" - .+","",contrast)]),
+                     TRUE ~ contrast)) |>
+  rename_terms_add_y() |>
+  mutate(conf.low=coalesce(conf.low,-Inf)) |>
+  mutate(conf.high=coalesce(conf.high,Inf)) |>
+  ggplot(aes(y=y,x=estimate,colour=model)) +
+  geom_point(position = position_dodge(width = .9)) +
+  scale_color_manual(values=age_colours) +
+  geom_linerange(aes(xmin=(conf.low), xmax=(conf.high)),
+                   position=position_dodge(width = .9)) +
+  scale_x_continuous(labels=scales::percent,breaks=seq(-1,1,0.25)) +
+  labs(title="MHU model by refined culture group",
+  subtitle="(people not attending school)",
+       colour="Age group",
+       y=NULL,
+       x="Average effect size and 95% confidence interval on MHU probability",
+       caption="StatCan Census PUMF 2011, 2016, 2021 (individuals)") 
+```
+
+This shows significant variation within culture groups, in particular for South Asian and Filipino populations. These effects get strengthened in the second generation, likely because first generation immigrants don't have family networks to fall back on. Especially for these two subgroups, the sample of third generation immigrants gets thin, but exploratory analysis indicates that the effect shrinks toward the mean for non-visible minorities. Running this analysis on the full census sample instead of just the PUMF might be able to make this more precise.
+
