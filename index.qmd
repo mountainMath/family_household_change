@@ -47,7 +47,7 @@ This repository contains the paper and code to replicate the analysis.
 
 <dt>Code</dt>
 <dd>
-<a type="button" href="https://github.com/mountainMath/family_household_change/blob/main/munimum_household_units_in_canada.qmd" class="btn btn-info">View replication code</a>
+<a type="button" href="https://github.com/mountainMath/family_household_change/blob/main/family_household_change.qmd" class="btn btn-info">View replication code</a>
 </dd>
 <dd>
 <a type="button" href="https://github.com/mountainMath/family_household_change" class="btn btn-info">View GitHub Repo</a>
