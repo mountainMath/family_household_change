@@ -4,5 +4,4 @@
 .Ruserdata
 data_cache/*
 *.rmarkdown
-family_household_change_*
-index_files/*
+family_household_change_cache/*
